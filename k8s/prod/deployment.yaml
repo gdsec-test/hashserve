@@ -1,0 +1,42 @@
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "hashserve"
+  namespace: "abuse-api-prod"
+  labels:
+    app: "hashserve"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: "hashserve"
+  template:
+    metadata:
+      labels:
+        app: "hashserve"
+    spec:
+      imagePullSecrets:
+        -
+          name: "dcu-artifactory-creds"
+      containers:
+        - name: "thorn-worker"
+          imagePullPolicy: "Always"
+          image: "docker-dcu-local.artifactory.secureserver.net/hashserve:prod"
+          env:
+            - name: BUILD_DATE
+              value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
+            - name: ENV
+              value: prod
+            - name: AMQP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: hashserve
+                  key: username
+            - name: AMQP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hashserve
+                  key: password
+            - name: AMQP_BROKER
+              value: rmq-dcu.int.godaddy.com
