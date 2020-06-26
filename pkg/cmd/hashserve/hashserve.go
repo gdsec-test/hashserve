@@ -1,5 +1,94 @@
 package hashserve
 
-func Run() error {
+import (
+	"context"
+	"os"
+
+	"github.com/pkg/errors"
+	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
+)
+
+// config provides a central location for all application specific configuration.
+type config struct {
+	// The environment in which to run the application e.g. dev or prod
+	// This variable may also be used for other things such as correctly
+	// namespacing RabbitMQ Exchanges, Queues, and Bindings.
+	env string
+
+	// Username to use when connecting to the AMQP Broker.
+	amqpUser string
+
+	// Password to use when connecting to the AMQP broker.
+	amqpPassword string
+
+	// Broker host to connect and consume messages from.
+	amqpBroker string
+
+}
+
+// load attempts to load all necessary environment variables needed to run the application.
+// The absence of any of these environment variables will return an err, else nil.
+func (w *config) load() (err error) {
+	if err = w.loadEnv("ENV", &w.env); err != nil {
+		return
+	}
+	if err = w.loadEnv("AMQP_USER", &w.amqpUser); err != nil {
+		return
+	}
+	if err = w.loadEnv("AMQP_PASSWORD", &w.amqpPassword); err != nil {
+		return
+	}
+	if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
+		return
+	}
+	return
+}
+
+// loadEnv attempts to look for an environment variable with name and
+// loads it into the destination pointed to by dst. If the environment
+// variable does not exist, it returns an error, else nil.
+func (w *config) loadEnv(name string, dst *string) error {
+	if *dst != `` {
+		return nil // Variable is already set
+	}
+	v, ok := os.LookupEnv(name)
+	if !ok {
+		return errors.Errorf("env var %q not set", name)
+	}
+
+	*dst = v
 	return nil
+}
+
+// Run initializes the baseline application, loggers, and other things necessary to Work.
+func Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	lr, lrUndo, err := logger.New("stderr")
+	if err != nil {
+		return err
+	}
+	defer lrUndo()
+
+	ctx = logger.WithContext(ctx, lr)
+
+	logger.Info(ctx, "app object created successfully")
+	return Work(ctx)
+}
+
+// Work serves as the main work function of the application.
+//
+// It is responsible for loading application specific configurations as well as
+// serving the main work loop.
+func Work(ctx context.Context) error {
+	config := config{}
+	if err := config.load(); err != nil {
+		return err
+	}
+
+
+	for {
+		logger.Info(ctx, "Consuming placeholder app is started and running successfully")
+	}
 }
