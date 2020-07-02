@@ -2,6 +2,11 @@ package hashserve
 
 import (
 	"context"
+	"fmt"
+	"github.secureserver.net/digital-crimes/hashserve/pkg/rabbitmq"
+	"github.secureserver.net/digital-crimes/hashserve/pkg/serve"
+	"go.uber.org/zap"
+	"net/url"
 	"os"
 
 	"github.com/pkg/errors"
@@ -86,9 +91,12 @@ func Work(ctx context.Context) error {
 	if err := config.load(); err != nil {
 		return err
 	}
-
-
+	uri := fmt.Sprintf("amqps://%s:%s@%s:5672/pdna", config.amqpUser, url.QueryEscape(config.amqpPassword),config.amqpBroker)
+	w := rabbitmq.NewConsumer(config.env, uri)
 	for {
-		logger.Info(ctx, "Consuming placeholder app is started and running successfully")
+		err := serve.WithBackoff(w).Serve(ctx)
+		if err != nil {
+			logger.Error(ctx, "main: unable to perform work", zap.Error(err))
+		}
 	}
 }
