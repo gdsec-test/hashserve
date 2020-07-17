@@ -12,15 +12,23 @@ type AccountIdentifiers struct {
 	XID string `json:"XID"`
 }
 
-type ThornWorkerRequest struct {
+type FingerprintRequest struct {
 	Path string `json:"path"`
 	PhotoDNA string `json:"photoDNA"`
 	MD5 string `json:"MD5"`
-	accountIdentifiers AccountIdentifiers
+	Product string `json:"product"`
+	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 }
 
-func(tr *ThornWorkerRequest) ValidateRequiredFields() error {
-	if (AccountIdentifiers{}) == tr.accountIdentifiers {
+// ScanRequest represents the full request made by a product
+// to submit potential CSAM
+type ScanRequest struct {
+	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
+	URL string `json:"url"`
+}
+
+func(tr *FingerprintRequest) ValidateRequiredFields() error {
+	if (AccountIdentifiers{}) == tr.Identifiers {
 		return errors.New("missing account identifiers")
 	}
 

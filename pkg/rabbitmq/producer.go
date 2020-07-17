@@ -28,8 +28,10 @@ func NewProducer(env, rmqURI string) *Producer {
 	}
 }
 
-func(p *Producer) Publish(tr *types.ThornWorkerRequest) error {
+func(p *Producer) Publish(tr *types.FingerprintRequest) error {
 	conn, err := Dial(p.uri)
+	log.Printf("producer uri %s", p.uri)
+
 	if err != nil {
 		log.Printf("failed to connect %s", err)
 	}
@@ -47,6 +49,8 @@ func(p *Producer) Publish(tr *types.ThornWorkerRequest) error {
 	}
 
 	json, err := json.Marshal(tr)
+	log.Printf("producer json %s", string(json))
+
 	if err != nil {
 		log.Printf("unable to marshal message %s", err)
 		return err
@@ -68,11 +72,13 @@ func(p *Producer) Publish(tr *types.ThornWorkerRequest) error {
 			message)
 		confirmed := <- confirms
 		if confirmed.Ack {
+			log.Printf("producer message %s", message)
 			break
 		} else {
 			log.Printf("published failed")
 			return err
 		}
 	}
+
 	return nil
 }
