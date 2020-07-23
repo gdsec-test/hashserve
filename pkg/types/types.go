@@ -25,6 +25,7 @@ type FingerprintRequest struct {
 type ScanRequest struct {
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 	URL string `json:"url"`
+	Product string `json:"product"`
 }
 
 func(tr *FingerprintRequest) ValidateRequiredFields() error {

@@ -127,7 +127,7 @@ func (c *Consumer) Serve(ctx context.Context) error {
 						Path : scanRequestData.URL,
 						MD5: md5Hash,
 						PhotoDNA: photoDNAHash,
-						Product:"",
+						Product: scanRequestData.Product,
 						Identifiers: types.AccountIdentifiers{
 							ShopperId: scanRequestData.Identifiers.ShopperId,
 							ContainerId: scanRequestData.Identifiers.ContainerId,
