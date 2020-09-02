@@ -1,20 +1,14 @@
 package rabbitmq
 
 import (
+	"bytes"
 	"context"
-	"crypto/md5"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/types"
 	"go.uber.org/zap"
-	"io"
+	"io/ioutil"
 	"net/http"
-	"os"
-	"os/exec"
-	"strings"
 )
 
 // Consumer abstracts the RabbitMQ connection and consumer loop from the caller.
@@ -45,8 +39,8 @@ func (c *Consumer) Serve(ctx context.Context) error {
 
 	conn, err := Dial(c.uri)
 
-	logger.Info(ctx, "URI",zap.String("URI", c.uri))
-	logger.Info(ctx, "ENV",zap.String("URI", c.env))
+	logger.Info(ctx, "connected to amqp URI: ",zap.String("URI", c.uri))
+	logger.Info(ctx, "connected to amqp in ENV: ",zap.String("URI", c.env))
 
 	if err != nil {
 		return err
@@ -64,205 +58,99 @@ func (c *Consumer) Serve(ctx context.Context) error {
 		return err
 	}
 
+	var httpClient = &http.Client{}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case msg := <-deliveries:
 			/*  Basic Functionalities of the following goRoutine
-				1) downloadFile - Downloads the content provided by the url in /tmp/pdna/ folder
-				2) generateMD5 - Generates an MD5 Hash of the downloaded file
-				3) generatePhotoDNA - Generates the photoDNA Hash of the downloaded file.
-				4) deleteFile - Deletes the downloaded file
-				5) creates and validates the ThornWorkerRequest
-				6) Publish the new request to ThornWorker queue
+			1) Read the published message by the hosting products
+			2) Unmarshall the same into type ScanRequest
+			3) Send the embedded URL (in the message body) over to hasher service
+			4) Get the pDNA and MD5 Hash as response from the hasher service
+			5) Creates and validate the ThornWorkerRequest
+			6) Publish the new request to ThornWorker queue
 			*/
 
 			message := string(msg.Body)
 			logger.Info(ctx, "Msg received",zap.String("msg", message))
 
-			if objErr := msg.Ack(false); objErr != nil {
-				logger.Error(ctx,"Error acknowledging message", zap.Error(objErr))
-				return objErr
-			}
-
-
 			scanRequestData := types.ScanRequest{}
 			err := json.Unmarshal([]byte(message), &scanRequestData)
 
-			//If unable to unmarshal the message into scanRequestData, log the error and acknowledge the message.
+			//If unable to unmarshal the message into scanRequestData, log the error.
 			if err != nil {
 				logger.Error(ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			}else{
+			} else {
+				hashRequest := types.HashRequest{
+					URL:  scanRequestData.URL,
+				}
 
-				//Generates the name of the file : sha of the URL would be used as the filename to avoid overwriting
-				fileName := buildFileName(scanRequestData.URL)
-				path := os.Getenv("DOWNLOAD_FILE_LOC") + "/" + fileName
-
-				//Downloads the content provided by the url in /app/tmp/pdna/ folder
-				err = downloadFile(scanRequestData.URL, path)
+				err:= hashRequest.ValidateRequiredFields()
 				if err != nil {
-					logger.Error(ctx, "failed to download the file from the url", zap.Error(err))
-				}else{
-					var objError error
-					objError = nil
+					logger.Error(ctx, "invalid URL", zap.Error(err))
+					return err
+				}
 
-					//Generates an MD5 Hash of the downloaded file
-					md5Hash, err := generateMD5Hash(path)
-					if err != nil {
-						logger.Error(ctx, "failed to generate MD5 hash of the file", zap.Error(err))
-						objError = err
-					}
+				// Marshal hashRequest to json
+				reqJson, err := json.Marshal(hashRequest)
+				if err != nil {
+					logger.Error(ctx, "failed to unmarshall json string into hashRequest struct", zap.Error(err))
+					return err
+				}
 
-					//Generates the photoDNA Hash of the downloaded file.
-					//PhotoDNA binaries should be located in /app/pdna/bin/java path
-					photoDNAHash, err := generatePhotoDNAHash(ctx, path)
-					if err != nil {
-						logger.Error(ctx, "failed to generate photoDNA hash of the file", zap.Error(err))
-						objError = err
-					}
+				//Get pDNA and MD5 Hash
+				req, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/hash", bytes.NewBuffer(reqJson))
+				if err != nil{
+					logger.Error(ctx, "failed getting a response from hasher microservice", zap.Error(err))
+					return err
+				}
 
-					//create and validate the new ThornWorkerRequest
-					objFingerprintRequest := types.FingerprintRequest{
-						Path : scanRequestData.URL,
-						MD5: md5Hash,
-						PhotoDNA: photoDNAHash,
-						Product: scanRequestData.Product,
-						Identifiers: types.AccountIdentifiers{
-							ShopperId: scanRequestData.Identifiers.ShopperId,
-							ContainerId: scanRequestData.Identifiers.ContainerId,
-							Domain: scanRequestData.Identifiers.Domain,
-							GUID: scanRequestData.Identifiers.GUID,
-							XID: scanRequestData.Identifiers.XID,
-						},
+				var hashedData types.HashResponse
+				resp, err := httpClient.Do(req)
+				body, err := ioutil.ReadAll(resp.Body)
+				err = json.Unmarshal(body, &hashedData)
 
-					}
-
-					err = objFingerprintRequest.ValidateRequiredFields()
-					if err != nil {
-						logger.Error(ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
-						objError = err
-					}
-
-					//Publish to ThornWorker queue only if no issues were encountered.
-					if objError == nil{
-						// Same Environment and URL as Consumer - but different exchange and Queue
-						objProducer := Producer{
-							env: c.env,
-							uri: c.uri,
-						}
-						logger.Info(ctx, "Msg being send",zap.Any("msg: ", objFingerprintRequest))
-
-						//Publish the new request to ThornWorker queue
-						err = objProducer.Publish(&objFingerprintRequest)
-						if err != nil {
-							logger.Error(ctx, "failed publishing to the thornworker queue", zap.Error(err))
-						}
-
-						//Delete the file -if present
-						err = deleteFile(path)
-						if err != nil {
-							logger.Error(ctx, "failed to delete the file: " + path, zap.Error(err))
-						}
-					}
+				objFingerprintRequest := types.FingerprintRequest{
+					Path : hashedData.URL,
+					MD5: hashedData.MD5,
+					PhotoDNA: hashedData.PDNA,
+					Product: scanRequestData.Product,
+					Identifiers: types.AccountIdentifiers{
+						ShopperId: scanRequestData.Identifiers.ShopperId,
+						ContainerId: scanRequestData.Identifiers.ContainerId,
+						Domain: scanRequestData.Identifiers.Domain,
+						GUID: scanRequestData.Identifiers.GUID,
+						XID: scanRequestData.Identifiers.XID,
+					},
 
 				}
+
+				err = objFingerprintRequest.ValidateRequiredFields()
+				if err != nil {
+					logger.Error(ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
+					return err
+				}
+
+				objProducer := Producer{
+					env: c.env,
+					uri: c.uri,
+				}
+
+				//Publish the new request to ThornWorker queue
+				err = objProducer.Publish(&objFingerprintRequest)
+				if err != nil {
+					logger.Error(ctx, "failed publishing to the thornworker queue", zap.Error(err))
+					return err
+				}
+			}
+
+			if objErr := msg.Ack(false); objErr != nil {
+				logger.Error(ctx,"error acknowledging message", zap.Error(objErr))
+				return objErr
 			}
 		}
 	}
-}
-
-func generatePhotoDNAHash(ctx context.Context, path string) (string, error) {
-	cmd := exec.Command("java", "-cp", os.Getenv("CLASSPATH"), "GenerateHashes", path)
-	out, err := cmd.CombinedOutput()
-
-	if err != nil {
-		return "", err
-	}
-
-	pDNAOutput := string(out)
-	pDNAHash := strings.Split(pDNAOutput, ",")
-	if len(pDNAHash) != 145 {
-		err := errors.New("invalid photoDNA")
-		return "",err
-	}
-	photoDNAHash := strings.Join(pDNAHash[1:], ",")
-	return photoDNAHash, nil
-}
-
-func deleteFile(path string) error {
-	if fileExists(path) {
-		var err = os.Remove(path)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
-func generateMD5Hash(fileName string) (string, error) {
-
-	if fileExists(fileName) {
-		// Reading From File
-		file, err := os.Open(fileName)
-		if err != nil {
-			return "", err
-		}
-
-		hash := md5.New()
-		//Copy the file in the hash interface and check for any error
-		if _, err := io.Copy(hash, file); err != nil {
-			return "", err
-		}
-
-		//Get the 16 bytes hash
-		hashInBytesFile := hash.Sum(nil)[:16]
-
-		//Convert the bytes to a string
-		returnMD5StringFile := hex.EncodeToString(hashInBytesFile)
-		file.Close()
-
-		return returnMD5StringFile, nil
-	}
-	err := errors.New(fileName + " does not exist")
-	return "", err
-}
-
-func buildFileName(fullURLFile string) string {
-
-	extension:= fullURLFile[strings.LastIndex(fullURLFile, "."):]
-
-	h := sha1.New()
-	h.Write([]byte(fullURLFile))
-	var fileName = hex.EncodeToString(h.Sum(nil)) + extension
-
-	return fileName
-}
-
-func downloadFile(url, fileName string) error{
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-
-	file, err := os.Create(fileName)
-	if err != nil {
-		return err
-	}
-
-	//local file in the associated path is created
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		return err
-	}
-	file.Close()
-	return nil
 }

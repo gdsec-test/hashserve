@@ -57,7 +57,6 @@ prep: build
 	# copy the app code to the build root
 	cp -p build/$(build_name)-linux-amd64 $(buildroot)/$(bin_name)
 	cp -rp k8s $(buildroot)
-	cp -rp pdna $(buildroot)
 	cp Dockerfile $(buildroot)
 
 .PHONY: dev
