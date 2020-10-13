@@ -54,3 +54,5 @@ spec:
               value: "sso.dev-godaddy.com"
             - name: ENV
               value: "dev"
+            - name: LOG_LEVEL
+              value: "DEBUG"

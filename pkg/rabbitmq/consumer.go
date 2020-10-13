@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
+	"github.com/streadway/amqp"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/types"
 	"go.uber.org/zap"
-	"io/ioutil"
-	"net/http"
 )
 
 // Consumer abstracts the RabbitMQ connection and consumer loop from the caller.
@@ -32,6 +34,14 @@ func NewConsumer(env, rmqURI string) *Consumer {
 		env:     env,
 		uri:     rmqURI,
 	}
+}
+
+func ackMessage(ctx context.Context, msg amqp.Delivery) error{
+	if objErr := msg.Ack(false); objErr != nil {
+		logger.Error(ctx,"error acknowledging message", zap.Error(objErr))
+		return objErr
+	}
+	return nil;
 }
 
 // Serve creates a new Connection and opens a new Channel to a RabbitMQ Broker.
@@ -104,13 +114,28 @@ func (c *Consumer) Serve(ctx context.Context) error {
 				//Get pDNA and MD5 Hash
 				req, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/hash", bytes.NewBuffer(reqJson))
 				if err != nil{
+					logger.Error(ctx, "Error in creating a request to hasher service", zap.Error(err))
+					return err
+				}
+
+				resp, err := httpClient.Do(req)
+
+				if err != nil{
 					logger.Error(ctx, "failed getting a response from hasher microservice", zap.Error(err))
 					return err
 				}
 
-				var hashedData types.HashResponse
-				resp, err := httpClient.Do(req)
+				//Log a non 200 response from hasher and continue
+				if resp.StatusCode != 200{
+					logger.Error(ctx,"Non 200 response from hasher service",zap.Error(err))
+					ackErr := ackMessage(ctx,msg)
+					if ackErr != nil{
+						return ackErr
+					}
+					continue
+				}
 				body, err := ioutil.ReadAll(resp.Body)
+				var hashedData types.HashResponse
 				err = json.Unmarshal(body, &hashedData)
 
 				objFingerprintRequest := types.FingerprintRequest{
@@ -147,9 +172,9 @@ func (c *Consumer) Serve(ctx context.Context) error {
 				}
 			}
 
-			if objErr := msg.Ack(false); objErr != nil {
-				logger.Error(ctx,"error acknowledging message", zap.Error(objErr))
-				return objErr
+			err = ackMessage(ctx,msg)
+			if err!=nil{
+				return err
 			}
 		}
 	}

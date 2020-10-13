@@ -54,3 +54,5 @@ spec:
               value: "sso.godaddy.com"
             - name: ENV
               value: "prod"
+            - name: LOG_LEVEL
+              value: "INFO"
