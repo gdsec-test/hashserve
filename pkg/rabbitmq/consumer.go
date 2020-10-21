@@ -112,7 +112,7 @@ func (c *Consumer) Serve(ctx context.Context) error {
 				}
 
 				//Get pDNA and MD5 Hash
-				req, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/hash", bytes.NewBuffer(reqJson))
+				req, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/hash/image", bytes.NewBuffer(reqJson))
 				if err != nil{
 					logger.Error(ctx, "Error in creating a request to hasher service", zap.Error(err))
 					return err
