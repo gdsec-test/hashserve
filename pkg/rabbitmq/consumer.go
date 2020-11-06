@@ -1,21 +1,18 @@
 package rabbitmq
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io/ioutil"
-	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/streadway/amqp"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/types"
 	"go.uber.org/zap"
 )
 
 // Consumer abstracts the RabbitMQ connection and consumer loop from the caller.
-// It reads messages from a delivery channel, adds them to a bundler, and executes
-// the bundler's handler after a certain amount of time or size threshold is reached.
 type Consumer struct {
 	// The environment in which to run the application e.g. dev or prod
 	// This variable is used by RabbitMQ to create the appropriate environment
@@ -25,157 +22,86 @@ type Consumer struct {
 	// The complete AMQP broker URL to connect to complete with usernames,
 	// passwords, ports, and virtual hosts.
 	uri string
-
 }
 
 // NewConsumer creates a new RabbitMQ Consumer.
 func NewConsumer(env, rmqURI string) *Consumer {
 	return &Consumer{
-		env:     env,
-		uri:     rmqURI,
+		env: env,
+		uri: rmqURI,
 	}
-}
-
-func ackMessage(ctx context.Context, msg amqp.Delivery) error{
-	if objErr := msg.Ack(false); objErr != nil {
-		logger.Error(ctx,"error acknowledging message", zap.Error(objErr))
-		return objErr
-	}
-	return nil;
 }
 
 // Serve creates a new Connection and opens a new Channel to a RabbitMQ Broker.
-func (c *Consumer) Serve(ctx context.Context) error {
-
+/*
+Over view of functionality:
+1. Serve creates an amqp consumer and listens to sigint signal.
+2. Serve also starts 4 additional go routines.
+3. StartWorker go routine listens to amqp messages passed to the jobs chan by serve,
+detects the content type and routes it to one of image ingest channel,
+video ingest channel or miscellaneous ingest channel.
+4. imageWorkerFunc, videoWorkerFunc and miscWorkerFunc go routines listens to the appropriate channel,
+executes content type specific logic and publishes to its respective rabbitmq queue
+*/
+func (c *Consumer) Serve(parentCtx context.Context) error {
+	ctx, cancel := context.WithCancel(parentCtx)
+	logger.Info(ctx, "connecting to amqp URI: ", zap.String("URI", c.uri))
+	logger.Info(ctx, "connecting to amqp in ENV: ", zap.String("ENV", c.env))
 	conn, err := Dial(c.uri)
-
-	logger.Info(ctx, "connected to amqp URI: ",zap.String("URI", c.uri))
-	logger.Info(ctx, "connected to amqp in ENV: ",zap.String("URI", c.env))
-
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-
 	ch, err := conn.Channel()
 	if err != nil {
 		return err
 	}
 	defer ch.Close()
-
 	deliveries, err := ch.Initialize(c.env)
 	if err != nil {
 		return err
 	}
 
-	var httpClient = &http.Client{}
+	// Handle sigterm signal
+	termChan := make(chan os.Signal)
+	signal.Notify(termChan, syscall.SIGINT, syscall.SIGTERM)
 
+	//Initialize the worker pool with all required channels. New amqp messages are fed to the jobschan, which distributes the job appropriately to image, video or text chan.
+	worker := Worker{
+		imageIngestChan: make(chan amqp.Delivery),
+		videoIngestChan: make(chan amqp.Delivery),
+		miscIngestChan:  make(chan amqp.Delivery),
+		jobsChan:        make(chan amqp.Delivery),
+		ctx:             ctx,
+		cancelFunc:      cancel,
+		env:             c.env,
+		uri:             c.uri,
+		conn:            conn,
+	}
+	wg := &sync.WaitGroup{}
+	go worker.startWorker()
+	wg.Add(3)
+	go worker.imageWorkerFunc(wg)
+	go worker.videoWorkerFunc(wg)
+	go worker.miscWorkerFunc(wg)
 	for {
 		select {
+		case <-termChan:
+			logger.Info(ctx, "SIGINT signal caught")
+			ch.Close()
+			cancel()
+			wg.Wait()
+			logger.Info(ctx, "Workers exited gracefully")
+			return nil
 		case <-ctx.Done():
-			return ctx.Err()
+			logger.Info(ctx, "Done signal caught")
+			ch.Close()
+			wg.Wait()
+			logger.Info(ctx, "Workers exited gracefully")
+			return nil
 		case msg := <-deliveries:
-			/*  Basic Functionalities of the following goRoutine
-			1) Read the published message by the hosting products
-			2) Unmarshall the same into type ScanRequest
-			3) Send the embedded URL (in the message body) over to hasher service
-			4) Get the pDNA and MD5 Hash as response from the hasher service
-			5) Creates and validate the ThornWorkerRequest
-			6) Publish the new request to ThornWorker queue
-			*/
-
-			message := string(msg.Body)
-			logger.Info(ctx, "Msg received",zap.String("msg", message))
-
-			scanRequestData := types.ScanRequest{}
-			err := json.Unmarshal([]byte(message), &scanRequestData)
-
-			//If unable to unmarshal the message into scanRequestData, log the error.
-			if err != nil {
-				logger.Error(ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			} else {
-				hashRequest := types.HashRequest{
-					URL:  scanRequestData.URL,
-				}
-
-				err:= hashRequest.ValidateRequiredFields()
-				if err != nil {
-					logger.Error(ctx, "invalid URL", zap.Error(err))
-					return err
-				}
-
-				// Marshal hashRequest to json
-				reqJson, err := json.Marshal(hashRequest)
-				if err != nil {
-					logger.Error(ctx, "failed to unmarshall json string into hashRequest struct", zap.Error(err))
-					return err
-				}
-
-				//Get pDNA and MD5 Hash
-				req, err := http.NewRequest(http.MethodPost, "http://localhost:8080/v1/hash/image", bytes.NewBuffer(reqJson))
-				if err != nil{
-					logger.Error(ctx, "Error in creating a request to hasher service", zap.Error(err))
-					return err
-				}
-
-				resp, err := httpClient.Do(req)
-
-				if err != nil{
-					logger.Error(ctx, "failed getting a response from hasher microservice", zap.Error(err))
-					return err
-				}
-
-				//Log a non 200 response from hasher and continue
-				if resp.StatusCode != 200{
-					logger.Error(ctx,"Non 200 response from hasher service",zap.Error(err))
-					ackErr := ackMessage(ctx,msg)
-					if ackErr != nil{
-						return ackErr
-					}
-					continue
-				}
-				body, err := ioutil.ReadAll(resp.Body)
-				var hashedData types.HashResponse
-				err = json.Unmarshal(body, &hashedData)
-
-				objFingerprintRequest := types.FingerprintRequest{
-					Path : hashedData.URL,
-					MD5: hashedData.MD5,
-					PhotoDNA: hashedData.PDNA,
-					Product: scanRequestData.Product,
-					Identifiers: types.AccountIdentifiers{
-						ShopperId: scanRequestData.Identifiers.ShopperId,
-						ContainerId: scanRequestData.Identifiers.ContainerId,
-						Domain: scanRequestData.Identifiers.Domain,
-						GUID: scanRequestData.Identifiers.GUID,
-						XID: scanRequestData.Identifiers.XID,
-					},
-
-				}
-
-				err = objFingerprintRequest.ValidateRequiredFields()
-				if err != nil {
-					logger.Error(ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
-					return err
-				}
-
-				objProducer := Producer{
-					env: c.env,
-					uri: c.uri,
-				}
-
-				//Publish the new request to ThornWorker queue
-				err = objProducer.Publish(&objFingerprintRequest)
-				if err != nil {
-					logger.Error(ctx, "failed publishing to the thornworker queue", zap.Error(err))
-					return err
-				}
-			}
-
-			err = ackMessage(ctx,msg)
-			if err!=nil{
-				return err
-			}
+			logger.Debug(ctx, "Message received")
+			worker.jobsChan <- msg
 		}
 	}
 }

@@ -12,7 +12,13 @@ var (
 )
 
 // New will create a new default logger.
-func New(paths ...string) (l *zap.Logger, undo func(), err error) {
+func New(logLevel string, paths ...string) (l *zap.Logger, undo func(), err error) {
+	var zapLogLevel zap.AtomicLevel
+	if logLevel == "DEBUG" {
+		zapLogLevel = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+	} else {
+		zapLogLevel = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+	}
 	prod := zap.NewDevelopmentEncoderConfig()
 	prod.NameKey = "name"
 
@@ -24,11 +30,11 @@ func New(paths ...string) (l *zap.Logger, undo func(), err error) {
 		zapcore.NewCore(
 			zapcore.NewJSONEncoder(prod),
 			w,
-			defaultLevel,
+			zapLogLevel,
 		),
 	)
 
-	undoLevel := defaultLevel.Level()
+	undoLevel := zapLogLevel.Level()
 	undoGlobal := zap.ReplaceGlobals(l)
 	undoStdLog := zap.RedirectStdLog(l)
 	undo = func() {
@@ -36,7 +42,7 @@ func New(paths ...string) (l *zap.Logger, undo func(), err error) {
 
 		undoGlobal()
 		undoStdLog()
-		defaultLevel.SetLevel(undoLevel)
+		zapLogLevel.SetLevel(undoLevel)
 	}
 	return
 }

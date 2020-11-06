@@ -1,11 +1,12 @@
 package rabbitmq
 
 import (
-	"encoding/json"
-	"github.com/streadway/amqp"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/types"
-	"log"
+	"context"
 	"time"
+
+	"github.com/streadway/amqp"
+	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
+	"go.uber.org/zap"
 )
 
 type Producer struct {
@@ -14,71 +15,57 @@ type Producer struct {
 	// specific namespacing for RabbitMQ Exchanges, Queues, and Bindings.
 	env string
 
-	// The complete AMQP broker URL to connect to complete with usernames,
-	// passwords, ports, and virtual hosts.
-	uri string
+	// Producer amqp connection
+	conn *Connection
 
+	// Producer amqp channel
+	ch *Channel
+
+	confirms chan amqp.Confirmation
 }
 
 // NewProducer creates a new RabbitMQ Producer.
-func NewProducer(env, rmqURI string) *Producer {
-	return &Producer{
-		env:     env,
-		uri:     rmqURI,
+func NewProducer(ctx context.Context, env string, connection *Connection) (*Producer, error) {
+	p := Producer{
+		env:  env,
+		conn: connection,
 	}
+	ch, err := p.conn.Channel()
+	if err != nil {
+		logger.Error(ctx, "failed to create channel", zap.Error(err))
+		return nil, err
+	}
+	p.ch = ch
+	p.confirms = p.ch.NotifyPublish(make(chan amqp.Confirmation, 1))
+	if err := p.ch.Confirm(false); err != nil {
+		logger.Error(ctx, "Error in confirm", zap.Error(err))
+		return nil, err
+	}
+	return &p, nil
 }
 
-func(p *Producer) Publish(tr *types.FingerprintRequest) error {
-	conn, err := Dial(p.uri)
-	log.Printf("producer uri %s", p.uri)
-
-	if err != nil {
-		log.Printf("failed to connect %s", err)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Printf("failed to create channel %s", err)
-	}
-	defer ch.Close()
-
-	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, 1))
-	if err := ch.Confirm(false); err != nil {
-		log.Printf("confirmation destination %s", err)
-	}
-
-	json, err := json.Marshal(tr)
-	log.Printf("producer json %s", string(json))
-
-	if err != nil {
-		log.Printf("unable to marshal message %s", err)
-		return err
-	}
-
+func (p *Producer) Publish(ctx context.Context, messageContent []byte, exchangeName string) error {
 	message := amqp.Publishing{
-		Headers: amqp.Table{},
-		ContentType: "application/json",
+		Headers:      amqp.Table{},
+		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent,
-		Timestamp: time.Time{},
-		Body: json,
+		Timestamp:    time.Time{},
+		Body:         messageContent,
 	}
-
+	logger.Debug(ctx, "About to publish")
 	for {
-		err = ch.Publish("pdna-processor",
+		err := p.ch.Publish(exchangeName,
 			"#."+p.env,
 			false,
 			false,
 			message)
-		confirmed := <- confirms
+		confirmed := <-p.confirms
 		if confirmed.Ack {
-			log.Printf("producer message %s", message)
 			break
 		} else {
-			log.Printf("published failed")
+			logger.Error(ctx, "Publish failed", zap.Error(err))
 			return err
 		}
 	}
-
 	return nil
 }
