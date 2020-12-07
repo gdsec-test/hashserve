@@ -21,6 +21,7 @@ type ImageFingerprintRequest struct {
 	MD5 string `json:"MD5"`
 	SHA1 string `json:"SHA1"`
 	Product string `json:"product"`
+	Source string `json:"source"`
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 }
 
@@ -30,6 +31,7 @@ type VideoFingerprintRequest struct{
 	MD5 string `json:"MD5"`
 	SHA1 string `json:"SHA1"`
 	Product string `json:"product"`
+	Source string `json:"source"`
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 }
 

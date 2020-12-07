@@ -191,6 +191,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			SHA1:        hashedData.SHA1,
 			PhotoDNA:    hashedData.PDNA,
 			Product:     scanRequestData.Product,
+			Source:      "scan",
 			Identifiers: scanRequestData.Identifiers,
 		}
 		err = imageFingerprintRequest.ValidateRequiredFields()
@@ -260,6 +261,7 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 			MD5:         videoHashedData.MD5,
 			SHA1:        videoHashedData.SHA1,
 			Product:     scanRequestData.Product,
+			Source:      "scan",
 			Identifiers: scanRequestData.Identifiers,
 		}
 
@@ -325,6 +327,7 @@ func (w Worker) startWorker() {
 			err := json.Unmarshal(msg.Body, &scanRequestData)
 			if err != nil {
 				logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
+				w.rejectMessage(msg)
 				continue
 			}
 			logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
