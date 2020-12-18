@@ -92,7 +92,7 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 // the content type based on the value of Content-Type header.
 func getContentType(ctx context.Context, Url string) (ContentType, error) {
 	var httpClient = &http.Client{}
-	req, err := http.NewRequest(http.MethodHead, Url, nil)
+	req, err := http.NewRequest(http.MethodGet, Url, nil)
 	if err != nil {
 		logger.Error(ctx, "Error in get request", zap.Error(err))
 		return "", err
