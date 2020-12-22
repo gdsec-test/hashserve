@@ -78,7 +78,7 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 	//Log a non 200 response from hasher and continue
 	if resp.StatusCode != 200 {
 		logger.Error(ctx, "Non 200 response from hasher service", zap.Error(err))
-		return nil, err
+		return nil, errors.New("Non 200 response")
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -174,15 +174,15 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		}
 		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, IMAGE_CONTENT)
 		if err != nil {
-			logger.Error(w.ctx, "Hashser request failed", zap.Error(err))
+			logger.Error(w.ctx, fmt.Sprintf("Hasher request failed for %s", scanRequestData.URL), zap.Error(err))
 			w.rejectMessage(imageMsg)
 			continue
 		}
 		var hashedData types.ImageHashResponse
 		err = json.Unmarshal(hasherResponse, &hashedData)
 		if err != nil {
-			logger.Error(w.ctx, "Failed to unmarshal hashser response")
-			w.cancelFunc()
+			logger.Error(w.ctx, fmt.Sprintf("Failed to unmarshal hashser response for %s", scanRequestData.URL), zap.Error(err))
+			w.rejectMessage(imageMsg)
 			continue
 		}
 		imageFingerprintRequest := types.ImageFingerprintRequest{
@@ -354,7 +354,7 @@ func (w Worker) startWorker() {
 			close(w.imageIngestChan)
 			close(w.videoIngestChan)
 			close(w.miscIngestChan)
-			return
+			panic("Exiting program")
 		}
 	}
 }
