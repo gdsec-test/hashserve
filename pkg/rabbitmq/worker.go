@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/streadway/amqp"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
@@ -68,7 +69,9 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		logger.Error(ctx, "Error in creating a request to hasher service", zap.Error(err))
 		return nil, err
 	}
-	var httpClient = &http.Client{}
+	var httpClient = &http.Client{
+		Timeout: 15 * time.Second,
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error(ctx, "failed getting a response from hasher microservice", zap.Error(err))
@@ -86,35 +89,6 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, err
 	}
 	return body, nil
-}
-
-// getContentType accepts an url as input, performs a get request and detects
-// the content type based on the value of Content-Type header.
-func getContentType(ctx context.Context, Url string) (ContentType, error) {
-	var httpClient = &http.Client{}
-	req, err := http.NewRequest(http.MethodGet, Url, nil)
-	if err != nil {
-		logger.Error(ctx, "Error in get request", zap.Error(err))
-		return "", err
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Error(ctx, fmt.Sprintf("Failed to get a response from %s", Url), zap.Error(err))
-		return "", err
-	}
-	//Handling error response codes
-	if resp.StatusCode >= 400 && resp.StatusCode < 600 {
-		logger.Error(ctx, fmt.Sprintf("Obtained status code %d", resp.StatusCode))
-		return "", errors.New("Error status code")
-	}
-	contentType := resp.Header.Get("Content-Type")
-	if strings.Contains(contentType, "image") {
-		return IMAGE_CONTENT, nil
-	} else if strings.Contains(contentType, "video") {
-		return VIDEO_CONTENT, nil
-	} else {
-		return MISC_CONTENT, nil
-	}
 }
 
 /*Worker is a wrapper around the different worker go routines.
@@ -155,6 +129,7 @@ func (w Worker) rejectMessage(msg amqp.Delivery) {
 and routes response to image exchange.*/
 func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 	defer wg.Done()
+	logger.Info(w.ctx, "Image worker started")
 	objProducer, err := NewProducer(w.ctx, w.env, w.conn)
 	if err != nil {
 		logger.Error(w.ctx, "Unable to create a producer", zap.Error(err))
@@ -331,12 +306,9 @@ func (w Worker) startWorker() {
 				continue
 			}
 			logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
-			contentType, err := getContentType(w.ctx, scanRequestData.URL)
-			if err != nil {
-				//Log error and ack message
-				logger.Error(w.ctx, "Unable to detect content type", zap.Error(err))
-				w.ackMessage(msg)
-				continue
+			contentType := IMAGE_CONTENT
+			if strings.HasSuffix(scanRequestData.URL, "pdf") {
+				contentType = MISC_CONTENT
 			}
 			if contentType == IMAGE_CONTENT {
 				logger.Debug(w.ctx, "Image content detected")

@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const IMAGE_WORKER_POOL_SIZE = 5
+
 // Consumer abstracts the RabbitMQ connection and consumer loop from the caller.
 type Consumer struct {
 	// The environment in which to run the application e.g. dev or prod
@@ -68,7 +70,7 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 
 	//Initialize the worker pool with all required channels. New amqp messages are fed to the jobschan, which distributes the job appropriately to image, video or text chan.
 	worker := Worker{
-		imageIngestChan: make(chan amqp.Delivery),
+		imageIngestChan: make(chan amqp.Delivery, IMAGE_WORKER_POOL_SIZE),
 		videoIngestChan: make(chan amqp.Delivery),
 		miscIngestChan:  make(chan amqp.Delivery),
 		jobsChan:        make(chan amqp.Delivery),
@@ -80,8 +82,10 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	}
 	wg := &sync.WaitGroup{}
 	go worker.startWorker()
-	wg.Add(3)
-	go worker.imageWorkerFunc(wg)
+	wg.Add(2 + IMAGE_WORKER_POOL_SIZE)
+	for i := 0; i < IMAGE_WORKER_POOL_SIZE; i++ {
+		go worker.imageWorkerFunc(wg)
+	}
 	go worker.videoWorkerFunc(wg)
 	go worker.miscWorkerFunc(wg)
 	for {
