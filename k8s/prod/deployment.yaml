@@ -6,7 +6,7 @@ metadata:
   labels:
     app: "hashserve"
 spec:
-  replicas: 1
+  replicas: 3
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -29,6 +29,8 @@ spec:
           env:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
+            - name: NO_IMAGE_WORKER_THREADS
+              value: '5'
             - name: ENV
               value: prod
             - name: AMQP_USER

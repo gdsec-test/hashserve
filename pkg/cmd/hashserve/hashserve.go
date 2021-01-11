@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.secureserver.net/digital-crimes/hashserve/pkg/rabbitmq"
 	"go.uber.org/zap"
@@ -29,6 +30,8 @@ type config struct {
 	// Broker host to connect and consume messages from.
 	amqpBroker string
 
+	// Number of Image worker go routines
+	nImageThread string
 	// Log level
 	logLevel string
 }
@@ -46,6 +49,9 @@ func (w *config) load() (err error) {
 		return
 	}
 	if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
+		return
+	}
+	if err = w.loadEnv("NO_IMAGE_WORKER_THREADS", &w.nImageThread); err != nil {
 		return
 	}
 	if err = w.loadEnv("LOG_LEVEL", &w.logLevel); err != nil {
@@ -96,8 +102,13 @@ func Run(ctx context.Context) error {
 // serving the main work loop.
 func Work(ctx context.Context, config *config) error {
 	uri := fmt.Sprintf("amqps://%s:%s@%s:5672/pdna", config.amqpUser, url.QueryEscape(config.amqpPassword), config.amqpBroker)
-	w := rabbitmq.NewConsumer(config.env, uri)
-	err := w.Serve(ctx)
+	nImageThreadInt, err := strconv.Atoi(config.nImageThread)
+	if err != nil {
+		logger.Error(ctx, "Unable to convert NO_IMAGE_WORKER_THREADS configuration to int")
+		return err
+	}
+	w := rabbitmq.NewConsumer(config.env, uri, nImageThreadInt)
+	err = w.Serve(ctx)
 	if err != nil {
 		logger.Error(ctx, "main: unable to perform work", zap.Error(err))
 		return err

@@ -10,7 +10,7 @@ build_date := $(shell date)
 
 # build config
 build_goos := darwin linux windows
-build_goarch := amd64 386
+build_goarch := amd64
 
 build_ldflags := -ldflags='-X main.Version=$(build_version)
 build_ldflags += -X main.Version=$(build_version)'

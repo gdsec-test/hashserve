@@ -91,6 +91,39 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 	return body, nil
 }
 
+// getContentType accepts an url as input, performs a get request and detects
+// the content type based on the value of Content-Type header.
+func getContentType(ctx context.Context, Url string, method string) (ContentType, error) {
+	var httpClient = &http.Client{}
+	req, err := http.NewRequest(method, Url, nil)
+	if err != nil {
+		logger.Error(ctx, "Error in get request", zap.Error(err))
+		return "", err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		logger.Error(ctx, fmt.Sprintf("Failed to get a response from %s", Url), zap.Error(err))
+		return "", err
+	}
+	//Handling error response codes
+	if resp.StatusCode >= 400 && resp.StatusCode < 600 {
+		logger.Error(ctx, fmt.Sprintf("Obtained status code %d", resp.StatusCode))
+		return "", errors.New("Error status code")
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		logger.Info(ctx, fmt.Sprintf("Did not obtain content type for %s request", method))
+		return "", nil
+	}
+	if strings.Contains(contentType, "image") {
+		return IMAGE_CONTENT, nil
+	} else if strings.Contains(contentType, "video") {
+		return VIDEO_CONTENT, nil
+	} else {
+		return MISC_CONTENT, nil
+	}
+}
+
 /*Worker is a wrapper around the different worker go routines.
 amqp messages are fed to the jobsChan where the content type is detected
 and routed appropriately to imageIngestChan, videoIngestChan or miscIngestChan.*/
@@ -208,6 +241,7 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 		return
 	}
 	defer objProducer.ch.Close()
+	logger.Info(w.ctx, "Video worker started")
 	for videoMsg := range w.videoIngestChan {
 		logger.Debug(w.ctx, "Video channel started")
 		scanRequestData := types.ScanRequest{}
@@ -262,71 +296,56 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 //miscWorkerFunc listens to miscIngestChan
 func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 	defer wg.Done()
-	objProducer, err := NewProducer(w.ctx, w.env, w.conn)
-	if err != nil {
-		logger.Error(w.ctx, "Unable to create a producer", zap.Error(err))
-		w.cancelFunc()
-		return
-	}
+	logger.Info(w.ctx, "Misc worker started")
 	for miscMsg := range w.miscIngestChan {
 		logger.Debug(w.ctx, "Miscellaneous channel started")
 		scanRequestData := types.ScanRequest{}
 		err := json.Unmarshal(miscMsg.Body, &scanRequestData)
-		//Publish the new request to misc queue
-		json, err := json.Marshal(scanRequestData)
 		if err != nil {
 			log.Printf("unable to marshal message %s", err)
 			w.cancelFunc()
 			continue
 		}
-		logger.Debug(w.ctx, fmt.Sprintf("Producer json %s", string(json)))
-		err = objProducer.Publish(w.ctx, json, MISCEXCHANGE)
-		if err != nil {
-			logger.Error(w.ctx, "failed publishing to misc exchange", zap.Error(err))
-			w.rejectMessage(miscMsg)
-			continue
-		}
 		w.ackMessage(miscMsg)
-		logger.Info(w.ctx, "Successfully processed misc content")
+		logger.Info(w.ctx, fmt.Sprintf("Successfully processed %s misc content", scanRequestData.URL))
 		continue
 	}
 }
 
-//startWorker listens to the job chan, detects the content type and routes the messages to imageIngestChan, videoIngestChan or miscIngestChan
-func (w Worker) startWorker() {
-	logger.Info(w.ctx, "Started worker")
-	for {
-		select {
-		case msg := <-w.jobsChan:
-			scanRequestData := types.ScanRequest{}
-			err := json.Unmarshal(msg.Body, &scanRequestData)
-			if err != nil {
-				logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-				w.rejectMessage(msg)
-				continue
-			}
-			logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
-			contentType := IMAGE_CONTENT
-			if strings.HasSuffix(scanRequestData.URL, "pdf") {
-				contentType = MISC_CONTENT
-			}
-			if contentType == IMAGE_CONTENT {
-				logger.Debug(w.ctx, "Image content detected")
-				w.imageIngestChan <- msg
-			} else if contentType == VIDEO_CONTENT {
-				logger.Debug(w.ctx, "Video content detected")
-				w.videoIngestChan <- msg
-			} else if contentType == MISC_CONTENT {
-				logger.Debug(w.ctx, "Misc content detected")
-				w.miscIngestChan <- msg
-			}
-
-		case <-w.ctx.Done():
-			logger.Info(w.ctx, "Worker received cancel signal, closing ingest channels")
-			close(w.imageIngestChan)
-			close(w.videoIngestChan)
-			close(w.miscIngestChan)
-			panic("Exiting program")
+//contentTypeWorker listens to the job chan, detects the content type and routes the messages to imageIngestChan, videoIngestChan or miscIngestChan
+func (w Worker) contentTypeWorker(wg *sync.WaitGroup) {
+	defer wg.Done()
+	logger.Info(w.ctx, "Content type worker started")
+	for msg := range w.jobsChan {
+		scanRequestData := types.ScanRequest{}
+		err := json.Unmarshal(msg.Body, &scanRequestData)
+		if err != nil {
+			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
+			w.rejectMessage(msg)
+			continue
+		}
+		logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
+		contentType, err := getContentType(w.ctx, scanRequestData.URL, http.MethodHead)
+		if err != nil || contentType == "" {
+			logger.Info(w.ctx, fmt.Sprintf("Failed head request for %s url, reverting to get", scanRequestData.URL))
+			contentType, err = getContentType(w.ctx, scanRequestData.URL, http.MethodGet)
+		}
+		if err != nil || contentType == "" {
+			//Both head and get failed
+			//Log error and ack message
+			logger.Error(w.ctx, "Unable to detect content type", zap.Error(err))
+			w.ackMessage(msg)
+			continue
+		}
+		if contentType == IMAGE_CONTENT {
+			logger.Debug(w.ctx, "Image content detected")
+			w.imageIngestChan <- msg
+		} else if contentType == VIDEO_CONTENT {
+			logger.Debug(w.ctx, "Video content detected")
+			w.videoIngestChan <- msg
+		} else if contentType == MISC_CONTENT {
+			logger.Debug(w.ctx, "Misc content detected")
+			w.miscIngestChan <- msg
 		}
 	}
 }

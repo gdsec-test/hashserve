@@ -29,6 +29,8 @@ spec:
           env:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
+            - name: NO_IMAGE_WORKER_THREADS
+              value: '5'
             - name: ENV
               value: dev
             - name: AMQP_USER

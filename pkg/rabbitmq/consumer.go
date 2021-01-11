@@ -12,8 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const IMAGE_WORKER_POOL_SIZE = 5
-
 // Consumer abstracts the RabbitMQ connection and consumer loop from the caller.
 type Consumer struct {
 	// The environment in which to run the application e.g. dev or prod
@@ -24,13 +22,17 @@ type Consumer struct {
 	// The complete AMQP broker URL to connect to complete with usernames,
 	// passwords, ports, and virtual hosts.
 	uri string
+
+	// Number of image worker go routines
+	nImageThreads int
 }
 
 // NewConsumer creates a new RabbitMQ Consumer.
-func NewConsumer(env, rmqURI string) *Consumer {
+func NewConsumer(env string, rmqURI string, nImageThreads int) *Consumer {
 	return &Consumer{
-		env: env,
-		uri: rmqURI,
+		env:           env,
+		uri:           rmqURI,
+		nImageThreads: nImageThreads,
 	}
 }
 
@@ -47,6 +49,7 @@ executes content type specific logic and publishes to its respective rabbitmq qu
 */
 func (c *Consumer) Serve(parentCtx context.Context) error {
 	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
 	logger.Info(ctx, "connecting to amqp URI: ", zap.String("URI", c.uri))
 	logger.Info(ctx, "connecting to amqp in ENV: ", zap.String("ENV", c.env))
 	conn, err := Dial(c.uri)
@@ -70,10 +73,10 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 
 	//Initialize the worker pool with all required channels. New amqp messages are fed to the jobschan, which distributes the job appropriately to image, video or text chan.
 	worker := Worker{
-		imageIngestChan: make(chan amqp.Delivery, IMAGE_WORKER_POOL_SIZE),
+		imageIngestChan: make(chan amqp.Delivery, c.nImageThreads),
 		videoIngestChan: make(chan amqp.Delivery),
 		miscIngestChan:  make(chan amqp.Delivery),
-		jobsChan:        make(chan amqp.Delivery),
+		jobsChan:        make(chan amqp.Delivery, c.nImageThreads),
 		ctx:             ctx,
 		cancelFunc:      cancel,
 		env:             c.env,
@@ -81,24 +84,33 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 		conn:            conn,
 	}
 	wg := &sync.WaitGroup{}
-	go worker.startWorker()
-	wg.Add(2 + IMAGE_WORKER_POOL_SIZE)
-	for i := 0; i < IMAGE_WORKER_POOL_SIZE; i++ {
-		go worker.imageWorkerFunc(wg)
-	}
+	// a single go routine for image and misc content and twice the number of
+	//image threads for image worker and content type detection worker
+	wg.Add(2 + c.nImageThreads*2)
 	go worker.videoWorkerFunc(wg)
 	go worker.miscWorkerFunc(wg)
+	for iter := 0; iter < c.nImageThreads; iter++ {
+		go worker.contentTypeWorker(wg)
+		go worker.imageWorkerFunc(wg)
+	}
 	for {
 		select {
 		case <-termChan:
 			logger.Info(ctx, "SIGINT signal caught")
 			ch.Close()
-			cancel()
+			close(worker.imageIngestChan)
+			close(worker.videoIngestChan)
+			close(worker.miscIngestChan)
+			close(worker.jobsChan)
 			wg.Wait()
 			logger.Info(ctx, "Workers exited gracefully")
 			return nil
 		case <-ctx.Done():
 			logger.Info(ctx, "Done signal caught")
+			close(worker.imageIngestChan)
+			close(worker.videoIngestChan)
+			close(worker.miscIngestChan)
+			close(worker.jobsChan)
 			ch.Close()
 			wg.Wait()
 			logger.Info(ctx, "Workers exited gracefully")
