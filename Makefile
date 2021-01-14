@@ -70,7 +70,11 @@ prod: prep
 	@echo "----- building $(reponame) $(build_version) -----"
 	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/prod/deployment.yaml
 	docker build -t $(dockerrepo):prod $(buildroot)
-
+.PHONY: ote
+ote: prep
+	@echo "----- building $(reponame) $(build_version) -----"
+	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/ote/deployment.yaml
+	docker build -t $(dockerrepo):ote $(buildroot)
 .PHONY: prod-deploy
 prod-deploy: prod
 	@echo "----- deploying $(reponame) prod -----"
@@ -82,6 +86,11 @@ dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
 	docker push $(dockerrepo):dev
 	kubectl --context dev-dcu apply -f $(buildroot)/k8s/dev/deployment.yaml --record
+.PHONY: ote-deploy
+ote-deploy: ote
+	@echo "----- deploying $(reponame) ote -----"
+	docker push $(dockerrepo):ote
+	kubectl --context ote-dcu apply -f $(buildroot)/k8s/ote/deployment.yaml --record
 
 PHONY: clean
 clean:
