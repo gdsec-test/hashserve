@@ -58,10 +58,6 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		logger.Error(ctx, "failed to unmarshall json string into hashRequest struct", zap.Error(err))
 		return nil, err
 	}
-	if err != nil {
-		logger.Error(ctx, "Error in obtaining hasher request json")
-		return nil, err
-	}
 
 	//Get hashses from hashser micro service
 	req, err := http.NewRequest(http.MethodPost, hasherURL, bytes.NewBuffer(reqJson))
@@ -70,7 +66,7 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, err
 	}
 	var httpClient = &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 2 * time.Minute,
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -94,10 +90,12 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 // getContentType accepts an url as input, performs a get request and detects
 // the content type based on the value of Content-Type header.
 func getContentType(ctx context.Context, Url string, method string) (ContentType, error) {
-	var httpClient = &http.Client{}
+	var httpClient = &http.Client{
+		Timeout: 60 * time.Second,
+	}
 	req, err := http.NewRequest(method, Url, nil)
 	if err != nil {
-		logger.Error(ctx, "Error in get request", zap.Error(err))
+		logger.Error(ctx, "Error in request", zap.Error(err))
 		return "", err
 	}
 	resp, err := httpClient.Do(req)
@@ -324,17 +322,18 @@ func (w Worker) contentTypeWorker(wg *sync.WaitGroup) {
 			w.rejectMessage(msg)
 			continue
 		}
-		logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
+		logger.Info(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
 		contentType, err := getContentType(w.ctx, scanRequestData.URL, http.MethodHead)
 		if err != nil || contentType == "" {
 			logger.Info(w.ctx, fmt.Sprintf("Failed head request for %s url, reverting to get", scanRequestData.URL))
 			contentType, err = getContentType(w.ctx, scanRequestData.URL, http.MethodGet)
 		}
+		logger.Info(w.ctx, fmt.Sprintf("Content type: %s", contentType))
 		if err != nil || contentType == "" {
 			//Both head and get failed
-			//Log error and ack message
+			//Log error and reject message
 			logger.Error(w.ctx, "Unable to detect content type", zap.Error(err))
-			w.ackMessage(msg)
+			w.rejectMessage(msg)
 			continue
 		}
 		if contentType == IMAGE_CONTENT {

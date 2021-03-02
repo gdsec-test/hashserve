@@ -6,7 +6,7 @@ metadata:
   labels:
     app: "hashserve"
 spec:
-  replicas: 3
+  replicas: 4
   revisionHistoryLimit: 2
   selector:
     matchLabels:

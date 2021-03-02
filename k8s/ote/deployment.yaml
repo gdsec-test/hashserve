@@ -15,6 +15,9 @@ spec:
     metadata:
       labels:
         app: "hashserve"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
     spec:
       imagePullSecrets:
         -
@@ -26,6 +29,8 @@ spec:
           env:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
+            - name: NO_IMAGE_WORKER_THREADS
+              value: '5'
             - name: ENV
               value: ote
             - name: AMQP_USER
@@ -40,3 +45,18 @@ spec:
                   key: password
             - name: AMQP_BROKER
               value: rmq-dcu.int.godaddy.com
+            - name: LOG_LEVEL
+              value: DEBUG
+
+        - name: "hasher"
+          imagePullPolicy: "Always"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:ote"
+          env:
+            - name: PORT
+              value: "8080"
+            - name: SSO_HOST
+              value: "sso.ote-godaddy.com"
+            - name: ENV
+              value: "ote"
+            - name: LOG_LEVEL
+              value: "DEBUG"
