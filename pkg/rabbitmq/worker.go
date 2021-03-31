@@ -90,7 +90,7 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 // getContentType checks if the file extension in url matches the miscellaneous or video extension
 // list. If no matches are found, its assumed that the given content is of image type
 func getContentType(ctx context.Context, Url string) ContentType {
-	miscContentExtension := []string{".pdf", ".svg"}
+	miscContentExtension := []string{".pdf", ".svg", ".doc", ".docx"}
 	videoContentExtension := []string{".mp4", ".wav"}
 	for _, content := range miscContentExtension {
 		if strings.HasSuffix(Url, content) {
@@ -136,7 +136,6 @@ func (w Worker) rejectMessage(msg amqp.Delivery) {
 		logger.Error(w.ctx, "error nacking message", zap.Error(objErr))
 		w.cancelFunc()
 	}
-	logger.Info(w.ctx, "Rejected message")
 }
 
 /*imageWorkerFunc listens to imageIngestChan, calls the hasher microservice to get hashes
