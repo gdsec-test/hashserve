@@ -70,13 +70,13 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		logger.Error(ctx, "failed getting a response from hasher microservice", zap.Error(err))
+		logger.Error(ctx, fmt.Sprintf("failed getting a response from hasher microservice. Request JSON: %s", string(reqJson)), zap.Error(err))
 		return nil, err
 	}
 
 	//Log a non 200 response from hasher and continue
 	if resp.StatusCode != 200 {
-		logger.Error(ctx, "Non 200 response from hasher service", zap.Error(err))
+		logger.Error(ctx, fmt.Sprintf("%d status code from hasher service. Request Json: %s", resp.StatusCode, string(reqJson)), zap.Error(err))
 		return nil, errors.New("Non 200 response")
 	}
 	body, err := ioutil.ReadAll(resp.Body)
@@ -87,39 +87,22 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 	return body, nil
 }
 
-// getContentType accepts an url as input, performs a get request and detects
-// the content type based on the value of Content-Type header.
-func getContentType(ctx context.Context, Url string, method string) (ContentType, error) {
-	var httpClient = &http.Client{
-		Timeout: 60 * time.Second,
+// getContentType checks if the file extension in url matches the miscellaneous or video extension
+// list. If no matches are found, its assumed that the given content is of image type
+func getContentType(ctx context.Context, Url string) ContentType {
+	miscContentExtension := []string{".pdf", ".svg"}
+	videoContentExtension := []string{".mp4", ".wav"}
+	for _, content := range miscContentExtension {
+		if strings.HasSuffix(Url, content) {
+			return MISC_CONTENT
+		}
 	}
-	req, err := http.NewRequest(method, Url, nil)
-	if err != nil {
-		logger.Error(ctx, "Error in request", zap.Error(err))
-		return "", err
+	for _, content := range videoContentExtension {
+		if strings.HasSuffix(Url, content) {
+			return VIDEO_CONTENT
+		}
 	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Error(ctx, fmt.Sprintf("Failed to get a response from %s", Url), zap.Error(err))
-		return "", err
-	}
-	//Handling error response codes
-	if resp.StatusCode >= 400 && resp.StatusCode < 600 {
-		logger.Error(ctx, fmt.Sprintf("Obtained status code %d", resp.StatusCode))
-		return "", errors.New("Error status code")
-	}
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		logger.Info(ctx, fmt.Sprintf("Did not obtain content type for %s request", method))
-		return "", nil
-	}
-	if strings.Contains(contentType, "image") {
-		return IMAGE_CONTENT, nil
-	} else if strings.Contains(contentType, "video") {
-		return VIDEO_CONTENT, nil
-	} else {
-		return MISC_CONTENT, nil
-	}
+	return IMAGE_CONTENT
 }
 
 /*Worker is a wrapper around the different worker go routines.
@@ -224,7 +207,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		}
 
 		w.ackMessage(imageMsg)
-		logger.Info(w.ctx, fmt.Sprintf("Successfully processed %s image", scanRequestData.URL))
+		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s image", scanRequestData.URL))
 	}
 }
 
@@ -287,7 +270,7 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 			continue
 		}
 		w.ackMessage(videoMsg)
-		logger.Info(w.ctx, fmt.Sprintf("Successfully processed %s video", scanRequestData.URL))
+		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s video", scanRequestData.URL))
 	}
 }
 
@@ -305,7 +288,7 @@ func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 			continue
 		}
 		w.ackMessage(miscMsg)
-		logger.Info(w.ctx, fmt.Sprintf("Successfully processed %s misc content", scanRequestData.URL))
+		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s misc content", scanRequestData.URL))
 		continue
 	}
 }
@@ -322,20 +305,8 @@ func (w Worker) contentTypeWorker(wg *sync.WaitGroup) {
 			w.rejectMessage(msg)
 			continue
 		}
-		logger.Info(w.ctx, fmt.Sprintf("Scan URL: %s", scanRequestData.URL))
-		contentType, err := getContentType(w.ctx, scanRequestData.URL, http.MethodHead)
-		if err != nil || contentType == "" {
-			logger.Info(w.ctx, fmt.Sprintf("Failed head request for %s url, reverting to get", scanRequestData.URL))
-			contentType, err = getContentType(w.ctx, scanRequestData.URL, http.MethodGet)
-		}
-		logger.Info(w.ctx, fmt.Sprintf("Content type: %s", contentType))
-		if err != nil || contentType == "" {
-			//Both head and get failed
-			//Log error and reject message
-			logger.Error(w.ctx, "Unable to detect content type", zap.Error(err))
-			w.rejectMessage(msg)
-			continue
-		}
+		contentType := getContentType(w.ctx, scanRequestData.URL)
+		logger.Debug(w.ctx, fmt.Sprintf("Scan URL: %s, Content type: %s", scanRequestData.URL, contentType))
 		if contentType == IMAGE_CONTENT {
 			logger.Debug(w.ctx, "Image content detected")
 			w.imageIngestChan <- msg

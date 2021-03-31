@@ -89,8 +89,8 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	wg.Add(2 + c.nImageThreads*2)
 	go worker.videoWorkerFunc(wg)
 	go worker.miscWorkerFunc(wg)
+	go worker.contentTypeWorker(wg)
 	for iter := 0; iter < c.nImageThreads; iter++ {
-		go worker.contentTypeWorker(wg)
 		go worker.imageWorkerFunc(wg)
 	}
 	for {
