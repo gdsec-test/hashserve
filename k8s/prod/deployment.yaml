@@ -30,7 +30,7 @@ spec:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
             - name: NO_IMAGE_WORKER_THREADS
-              value: '5'
+              value: '10'
             - name: ENV
               value: prod
             - name: AMQP_USER

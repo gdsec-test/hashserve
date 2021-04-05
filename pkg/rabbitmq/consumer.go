@@ -86,7 +86,7 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	wg := &sync.WaitGroup{}
 	// a single go routine for image and misc content and twice the number of
 	//image threads for image worker and content type detection worker
-	wg.Add(2 + c.nImageThreads*2)
+	wg.Add(3 + c.nImageThreads)
 	go worker.videoWorkerFunc(wg)
 	go worker.miscWorkerFunc(wg)
 	go worker.contentTypeWorker(wg)

@@ -30,7 +30,7 @@ spec:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
             - name: NO_IMAGE_WORKER_THREADS
-              value: '5'
+              value: '10'
             - name: ENV
               value: ote
             - name: AMQP_USER
@@ -50,7 +50,7 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:ote"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:dev"
           env:
             - name: PORT
               value: "8080"
