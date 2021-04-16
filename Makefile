@@ -4,13 +4,15 @@ buildroot := $(HOME)/dockerbuild/$(reponame)
 dockerrepo := docker-dcu-local.artifactory.secureserver.net/$(bin_name)
 # https://golang.org/doc/install/source#environment
 build_pkg ?= github.secureserver.net/digital-crimes/hashserve
-
+commit :=
+shell := /bin/bash
 build_version ?= $(shell git describe --always)
 build_date := $(shell date)
 
 # build config
-build_goos := darwin linux windows
+build_goos := darwin linux
 build_goarch := amd64
+build_branch := origin/master
 
 build_ldflags := -ldflags='-X main.Version=$(build_version)
 build_ldflags += -X main.Version=$(build_version)'
@@ -68,8 +70,10 @@ dev: prep
 .PHONY: prod
 prod: prep
 	@echo "----- building $(reponame) $(build_version) -----"
+	$(eval commit:=$(shell git rev-parse --short HEAD))
 	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/prod/deployment.yaml
-	docker build -t $(dockerrepo):prod $(buildroot)
+	sed -ie 's/REPLACE_WITH_GIT_COMMIT/$(commit)/' $(buildroot)/k8s/prod/deployment.yaml
+	docker build -t $(dockerrepo):$(commit) $(buildroot)
 .PHONY: ote
 ote: prep
 	@echo "----- building $(reponame) $(build_version) -----"
@@ -78,7 +82,12 @@ ote: prep
 .PHONY: prod-deploy
 prod-deploy: prod
 	@echo "----- deploying $(reponame) prod -----"
-	docker push $(dockerrepo):prod
+	$(eval commit:=$(shell git rev-parse --short HEAD))
+	read -p "About to build production image from main branch. Are you sure? (Y/N): " response ; \
+	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
+	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
+	git fetch && git checkout $(build_branch)
+	docker push $(dockerrepo):$(commit)
 	kubectl --context prod-dcu apply -f $(buildroot)/k8s/prod/deployment.yaml --record
 
 .PHONY: dev-deploy
@@ -89,7 +98,12 @@ dev-deploy: dev
 .PHONY: ote-deploy
 ote-deploy: ote
 	@echo "----- deploying $(reponame) ote -----"
-	docker push $(dockerrepo):ote
+	$(eval commit:=$(shell git rev-parse --short HEAD))
+	read -p "About to build production image from main branch. Are you sure? (Y/N): " response ; \
+	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
+	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
+	git fetch && git checkout $(build_branch)
+	docker push $(dockerrepo):$(commit)
 	kubectl --context ote-dcu apply -f $(buildroot)/k8s/ote/deployment.yaml --record
 
 PHONY: clean

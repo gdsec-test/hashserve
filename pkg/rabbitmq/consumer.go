@@ -62,7 +62,7 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 		return err
 	}
 	defer ch.Close()
-	deliveries, err := ch.Initialize(c.env)
+	deliveries, err := ch.Initialize(c.env, c.nImageThreads*2)
 	if err != nil {
 		return err
 	}
@@ -74,8 +74,8 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	//Initialize the worker pool with all required channels. New amqp messages are fed to the jobschan, which distributes the job appropriately to image, video or text chan.
 	worker := Worker{
 		imageIngestChan: make(chan amqp.Delivery, c.nImageThreads),
-		videoIngestChan: make(chan amqp.Delivery),
-		miscIngestChan:  make(chan amqp.Delivery),
+		videoIngestChan: make(chan amqp.Delivery, c.nImageThreads),
+		miscIngestChan:  make(chan amqp.Delivery, c.nImageThreads),
 		jobsChan:        make(chan amqp.Delivery, c.nImageThreads),
 		ctx:             ctx,
 		cancelFunc:      cancel,

@@ -6,7 +6,7 @@ metadata:
   labels:
     app: "hashserve"
 spec:
-  replicas: 4
+  replicas: 6
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -25,7 +25,7 @@ spec:
       containers:
         - name: "hashserve"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hashserve:prod"
+          image: "docker-dcu-local.artifactory.secureserver.net/hashserve:REPLACE_WITH_GIT_COMMIT"
           env:
             - name: BUILD_DATE
               value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
@@ -50,7 +50,7 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:prod"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:cf24945"
           env:
             - name: PORT
               value: "8080"

@@ -73,7 +73,7 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		logger.Error(ctx, fmt.Sprintf("failed getting a response from hasher microservice. Request JSON: %s", string(reqJson)), zap.Error(err))
 		return nil, err
 	}
-
+	defer resp.Body.Close()
 	//Log a non 200 response from hasher and continue
 	if resp.StatusCode != 200 {
 		logger.Error(ctx, fmt.Sprintf("%d status code from hasher service. Request Json: %s", resp.StatusCode, string(reqJson)), zap.Error(err))
@@ -232,42 +232,6 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 			w.rejectMessage(videoMsg)
 			continue
 		}
-		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, VIDEO_CONTENT)
-		if err != nil {
-			logger.Error(w.ctx, "Hashser request failed", zap.Error(err))
-			w.rejectMessage(videoMsg)
-			continue
-		}
-		var videoHashedData types.VideoHashResponse
-		err = json.Unmarshal(hasherResponse, &videoHashedData)
-		if err != nil {
-			logger.Error(w.ctx, "Failed to unmarshal hashser response")
-			w.cancelFunc()
-			continue
-		}
-		videoFingerprintRequest := types.VideoFingerprintRequest{
-			Path:        videoHashedData.URL,
-			MD5:         videoHashedData.MD5,
-			SHA1:        videoHashedData.SHA1,
-			Product:     scanRequestData.Product,
-			Source:      "scan",
-			Identifiers: scanRequestData.Identifiers,
-		}
-
-		//Publish the new request to hasher video queue
-		json, err := json.Marshal(videoFingerprintRequest)
-		if err != nil {
-			log.Printf("unable to marshal message %s", err)
-			w.cancelFunc()
-			continue
-		}
-		logger.Debug(w.ctx, fmt.Sprintf("Producer json %s", string(json)))
-		err = objProducer.Publish(w.ctx, json, VIDEOEXCHANGE)
-		if err != nil {
-			logger.Error(w.ctx, "failed publishing to video exchange", zap.Error(err))
-			w.rejectMessage(videoMsg)
-			continue
-		}
 		w.ackMessage(videoMsg)
 		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s video", scanRequestData.URL))
 	}
@@ -283,7 +247,7 @@ func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 		err := json.Unmarshal(miscMsg.Body, &scanRequestData)
 		if err != nil {
 			log.Printf("unable to marshal message %s", err)
-			w.cancelFunc()
+			w.rejectMessage(miscMsg)
 			continue
 		}
 		w.ackMessage(miscMsg)
@@ -295,7 +259,7 @@ func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 //contentTypeWorker listens to the job chan, detects the content type and routes the messages to imageIngestChan, videoIngestChan or miscIngestChan
 func (w Worker) contentTypeWorker(wg *sync.WaitGroup) {
 	defer wg.Done()
-	logger.Info(w.ctx, "Content type worker started")
+	logger.Info(w.ctx, "Content type worker started*")
 	for msg := range w.jobsChan {
 		scanRequestData := types.ScanRequest{}
 		err := json.Unmarshal(msg.Body, &scanRequestData)

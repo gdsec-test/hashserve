@@ -24,7 +24,7 @@ var products = [...]string{
 //
 // Finally, return a <-chan amqp.Delivery channel which serves as a way to consume messages
 // that are produced on the queue above.
-func (ch *Channel) Initialize(env string) (<-chan amqp.Delivery, error) {
+func (ch *Channel) Initialize(env string, prefetchCount int) (<-chan amqp.Delivery, error) {
 	if err := ch.exchangeDeclare(env); err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (ch *Channel) Initialize(env string) (<-chan amqp.Delivery, error) {
 	// QoS determines how many RabbitMQ messages can be consumed for a given connection.
 	// This prevents the main worker loop from pulling an unbounded amount of tasks despite
 	// much of the downstream work being blocked by Semaphores and other mechanisms.
-	if err := ch.Qos(1000, 0, false); err != nil {
+	if err := ch.Qos(prefetchCount, 0, false); err != nil {
 		return nil, err
 	}
 
@@ -57,7 +57,7 @@ func (ch *Channel) Initialize(env string) (<-chan amqp.Delivery, error) {
 
 func (ch *Channel) exchangeDeclare(env string) error {
 	err := ch.ExchangeDeclare(
-		"hashserve-"+env, // Name
+		"hashserve-"+env,   // Name
 		amqp.ExchangeTopic, // Kind
 		true,               // Durable
 		false,              // AutoDelete
@@ -90,10 +90,10 @@ func (ch *Channel) exchangeBind(env string) error {
 	for _, p := range products {
 		if err := ch.ExchangeBind(
 			"hashserve-"+env, // Destination
-			"#."+env,           // Key
-			p,                  // Source
-			false,              // NoWait
-			nil,                // Args
+			"#."+env,         // Key
+			p,                // Source
+			false,            // NoWait
+			nil,              // Args
 		); err != nil {
 			return err
 		}
@@ -105,22 +105,22 @@ func (ch *Channel) exchangeBind(env string) error {
 func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
 	q, err := ch.QueueDeclare(
 		"hashserve-"+env, // Name
-		true,               // Durable
-		false,              // AutoDelete
-		false,              // Exclusive
-		false,              // NoWait
-		nil,                // Args
+		true,             // Durable
+		false,            // AutoDelete
+		false,            // Exclusive
+		false,            // NoWait
+		nil,              // Args
 	)
 	if err != nil {
 		return amqp.Queue{}, err
 	}
 
 	err = ch.QueueBind(
-		q.Name,             // Name
-		"#."+env,           // Key
+		q.Name,           // Name
+		"#."+env,         // Key
 		"hashserve-"+env, // Exchange
-		false,              // NoWait
-		nil,                // Args
+		false,            // NoWait
+		nil,              // Args
 	)
 
 	if err != nil {
