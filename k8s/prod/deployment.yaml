@@ -6,7 +6,7 @@ metadata:
   labels:
     app: "hashserve"
 spec:
-  replicas: 6
+  replicas: 4
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -50,13 +50,35 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:cf24945"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:b349efd"
           env:
             - name: PORT
               value: "8080"
-            - name: SSO_HOST
-              value: "sso.godaddy.com"
             - name: ENV
               value: "prod"
             - name: LOG_LEVEL
               value: "INFO"
+            - name: DOWNLOAD_FILE_LOC
+              value: /filecache
+            - name: PDNA_URL
+              value: "http://127.0.0.1:9091"
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+        
+        - name: "hasher-pdna"
+          imagePullPolicy: "Always"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:b349efd"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9091
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+
+      volumes:
+      - name: file-cache-volume
+        emptyDir: {}

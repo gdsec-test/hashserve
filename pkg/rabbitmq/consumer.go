@@ -2,10 +2,12 @@ package rabbitmq
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/streadway/amqp"
 	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
@@ -93,6 +95,19 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	for iter := 0; iter < c.nImageThreads; iter++ {
 		go worker.imageWorkerFunc(wg)
 	}
+	// Wait for hasher and hasher pdna before consuming messages
+	for {
+		respHasherPdna, errPdna := http.Get("http://127.0.0.1:9091/health")
+		respHasher, errHasher := http.Get("http://127.0.0.1:8080/health")
+		if errPdna != nil || errHasher != nil ||
+			respHasherPdna.StatusCode != 200 || respHasher.StatusCode != 200 {
+			logger.Info(ctx, "Hasher service is not up, sleeping for 5 seconds")
+			time.Sleep(5 * time.Second)
+		} else {
+			break
+		}
+	}
+	logger.Info(ctx, "Consuming from rabbitmq")
 	for {
 		select {
 		case <-termChan:

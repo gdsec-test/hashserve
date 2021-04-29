@@ -50,13 +50,41 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:cf24945"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:b349efd"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
           env:
             - name: PORT
               value: "8080"
-            - name: SSO_HOST
-              value: "sso.ote-godaddy.com"
             - name: ENV
               value: "ote"
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: DOWNLOAD_FILE_LOC
+              value: /filecache
+            - name: PDNA_URL
+              value: "http://127.0.0.1:9091"
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+        
+        - name: "hasher-pdna"
+          imagePullPolicy: "Always"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:b349efd"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9091
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+        
+      volumes:
+      - name: file-cache-volume
+        emptyDir: {}

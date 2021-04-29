@@ -51,12 +51,39 @@ spec:
         - name: "hasher"
           imagePullPolicy: "Always"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher:dev"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
           env:
             - name: PORT
               value: "8080"
-            - name: SSO_HOST
-              value: "sso.dev-godaddy.com"
             - name: ENV
               value: "dev"
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: DOWNLOAD_FILE_LOC
+              value: /filecache
+            - name: PDNA_URL
+              value: "http://127.0.0.1:9091"
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+        
+        - name: "hasher-pdna"
+          imagePullPolicy: "Always"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:dev"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9091
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+          - mountPath: /filecache
+            name: file-cache-volume
+      volumes:
+      - name: file-cache-volume
+        emptyDir: {}
