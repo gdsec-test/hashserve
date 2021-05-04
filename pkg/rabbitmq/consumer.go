@@ -27,14 +27,18 @@ type Consumer struct {
 
 	// Number of image worker go routines
 	nImageThreads int
+
+	// Max retry count
+	maxRetrycount int
 }
 
 // NewConsumer creates a new RabbitMQ Consumer.
-func NewConsumer(env string, rmqURI string, nImageThreads int) *Consumer {
+func NewConsumer(env string, rmqURI string, nImageThreads int, maxRetrycount int) *Consumer {
 	return &Consumer{
 		env:           env,
 		uri:           rmqURI,
 		nImageThreads: nImageThreads,
+		maxRetrycount: maxRetrycount,
 	}
 }
 
@@ -84,6 +88,7 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 		env:             c.env,
 		uri:             c.uri,
 		conn:            conn,
+		maxRetryCount:   c.maxRetrycount,
 	}
 	wg := &sync.WaitGroup{}
 	// a single go routine for image and misc content and twice the number of

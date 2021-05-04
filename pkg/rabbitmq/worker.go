@@ -25,16 +25,18 @@ const (
 	IMAGEEXCHANGENAME string      = "pdna-processor"
 	VIDEOEXCHANGE     string      = "video-processor"
 	MISCEXCHANGE      string      = "misc-processor"
+	RETRYEXCHANGE     string      = "hashserve-dlq"
 	IMAGE_CONTENT     ContentType = "image"
 	VIDEO_CONTENT     ContentType = "video"
 	MISC_CONTENT      ContentType = "miscellaneous"
 	VIDEO_HASHER_URL  string      = "http://localhost:8080/v1/hash/video"
 	IMAGE_HASHER_URL  string      = "http://localhost:8080/v1/hash/image"
+	BAD_REQUEST_ERROR string      = "URL returned 4xx error"
 )
 
 //getHashes accepts the url as input, calls the hasher service and
 //returns the response as a byte sequence
-func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte, error) {
+func getHashes(ctx context.Context, url string, retryCount int, contentType ContentType) ([]byte, error) {
 	var hasherURL string
 	if contentType == VIDEO_CONTENT {
 		hasherURL = VIDEO_HASHER_URL
@@ -44,7 +46,8 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, errors.New("Unsupported file type by hasher microservice")
 	}
 	hashRequest := types.HashRequest{
-		URL: url,
+		URL:        url,
+		RetryCount: retryCount,
 	}
 	err := hashRequest.ValidateRequiredFields()
 	if err != nil {
@@ -74,12 +77,16 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, err
 	}
 	defer resp.Body.Close()
-	//Log a non 200 response from hasher and continue
-	if resp.StatusCode != 200 {
+	body, err := ioutil.ReadAll(resp.Body)
+	logger.Debug(ctx, fmt.Sprintf("Hasher status code: %d, Body: %s", resp.StatusCode, string(body)))
+	// Handle 4xxs
+	bodyContent := strings.TrimSuffix(string(body), "\n")
+	if resp.StatusCode == http.StatusBadRequest && bodyContent == BAD_REQUEST_ERROR {
+		return nil, errors.New(BAD_REQUEST_ERROR)
+	} else if resp.StatusCode != 200 {
 		logger.Error(ctx, fmt.Sprintf("%d status code from hasher service. Request Json: %s", resp.StatusCode, string(reqJson)), zap.Error(err))
 		return nil, errors.New("Non 200 response")
 	}
-	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error(ctx, "Unable to convert response to byte sequence", zap.Error(err))
 		return nil, err
@@ -118,6 +125,7 @@ type Worker struct {
 	env             string
 	uri             string
 	conn            *Connection
+	maxRetryCount   int
 }
 
 //ackMessage acknowledges the given amqp message
@@ -160,7 +168,30 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			w.rejectMessage(imageMsg)
 			continue
 		}
-		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, IMAGE_CONTENT)
+		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, scanRequestData.RetryCount, IMAGE_CONTENT)
+		// Reject image if 4xx error is obtained while trying to download the image
+		if err != nil && err.Error() == BAD_REQUEST_ERROR {
+			logger.Error(w.ctx, fmt.Sprintf("Obtained 4xx status code for %s. Rejecting message", scanRequestData.URL))
+			w.rejectMessage(imageMsg)
+			continue
+		} else if err != nil && scanRequestData.RetryCount >= w.maxRetryCount {
+			logger.Error(w.ctx, fmt.Sprintf("Max retry count reached for %s. Rejecting message", scanRequestData.URL))
+			w.rejectMessage(imageMsg)
+			continue
+		} else if err != nil {
+			// Requeue in dead letter queue
+			scanRequestData.RetryCount = scanRequestData.RetryCount + 1
+			json, _ := json.Marshal(scanRequestData)
+			err = objProducer.Publish(w.ctx, json, RETRYEXCHANGE)
+			if err != nil {
+				logger.Error(w.ctx, "failed publishing to the retry queue", zap.Error(err))
+				w.cancelFunc()
+				continue
+			}
+			logger.Info(w.ctx, fmt.Sprintf("%s URL published for retry", scanRequestData.URL))
+			w.ackMessage(imageMsg)
+			continue
+		}
 		if err != nil {
 			logger.Error(w.ctx, fmt.Sprintf("Hasher request failed for %s", scanRequestData.URL), zap.Error(err))
 			w.rejectMessage(imageMsg)

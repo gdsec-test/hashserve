@@ -41,11 +41,13 @@ type ScanRequest struct {
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 	URL         string             `json:"url"`
 	Product     string             `json:"product"`
+	RetryCount  int                `json:"retryCount"`
 }
 
 // HashRequest represents the full request made by hashserve to Hasher microservice
 type HashRequest struct {
-	URL string `json:"URL"`
+	URL        string `json:"URL"`
+	RetryCount int    `json:retryCount`
 }
 
 // ImageHashResponse represents the full response received from Hasher microservice
