@@ -191,7 +191,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 				w.cancelFunc()
 				continue
 			}
-			logger.Info(w.ctx, fmt.Sprintf("%s URL published for retry", scanRequestData.URL))
+			logger.Error(w.ctx, fmt.Sprintf("Obtained status message: %s.%s URL published for retry", hashedData.StatusMessage, scanRequestData.URL))
 			w.ackMessage(imageMsg)
 			continue
 		}
