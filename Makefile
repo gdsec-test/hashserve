@@ -77,8 +77,10 @@ prod: prep
 .PHONY: ote
 ote: prep
 	@echo "----- building $(reponame) $(build_version) -----"
+	$(eval commit:=$(shell git rev-parse --short HEAD))
 	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/ote/deployment.yaml
-	docker build -t $(dockerrepo):ote $(buildroot)
+	sed -ie 's/REPLACE_WITH_GIT_COMMIT/$(commit)/' $(buildroot)/k8s/ote/deployment.yaml
+	docker build -t $(dockerrepo):$(commit) $(buildroot)
 .PHONY: prod-deploy
 prod-deploy: prod
 	@echo "----- deploying $(reponame) prod -----"
