@@ -184,6 +184,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE || err != nil {
 			// Requeue in dead letter queue
 			scanRequestData.RetryCount = scanRequestData.RetryCount + 1
+			scanRequestData.PublishTime = time.Now().Format(time.RFC3339)
 			json, _ := json.Marshal(scanRequestData)
 			err = objProducer.Publish(w.ctx, json, RETRYEXCHANGE)
 			if err != nil {

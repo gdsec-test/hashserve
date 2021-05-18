@@ -43,6 +43,7 @@ type ScanRequest struct {
 	Product     string             `json:"product"`
 	Cert        string             `json:"cert,omitempty"`
 	RetryCount  int                `json:"retryCount"`
+	PublishTime string             `json:"publishTime,omitempty"`
 }
 
 // HashRequest represents the full request made by hashserve to Hasher microservice
