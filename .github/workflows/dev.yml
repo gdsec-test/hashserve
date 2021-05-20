@@ -60,7 +60,12 @@ jobs:
           context: .
           push: true
           tags: docker-dcu-local.artifactory.secureserver.net/hashserve:dev
-
+      - uses: azure/k8s-set-context@v1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+          context: dev-dcu
+        id: setcontext
       - uses: Azure/k8s-deploy@v1.4
         with:
           images: |
