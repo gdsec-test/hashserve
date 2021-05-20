@@ -72,7 +72,7 @@ jobs:
       - uses: Azure/k8s-deploy@v1.4
         with:
           manifests: |
-            deployment.yaml
+            hashserve/k8s/dev/deployment.yaml
           images: |
             docker-dcu-local.artifactory.secureserver.net/hashserve:dev
           imagepullsecrets: |
