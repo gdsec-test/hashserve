@@ -36,6 +36,7 @@ jobs:
         run: go test -v ./...
   install kubectl:
     runs-on: [self-hosted, dcu]
+    steps:
       - name: Install
         run: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
 
