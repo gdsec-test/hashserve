@@ -60,8 +60,6 @@ jobs:
           context: .
           push: true
           tags: docker-dcu-local.artifactory.secureserver.net/hashserve:dev
-      - name: test-ls
-        run: ls
       - uses: azure/setup-kubectl@v1
         with:
           version: 'v1.15.0'
