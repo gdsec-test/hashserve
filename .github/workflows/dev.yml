@@ -34,7 +34,7 @@ jobs:
           go-version: 1.15
       - name: Test
         run: go test -v ./...
-  install kubectl:
+  install-kubectl:
     runs-on: [self-hosted, dcu]
     steps:
       - name: Install
