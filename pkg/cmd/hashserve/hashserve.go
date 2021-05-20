@@ -32,8 +32,12 @@ type config struct {
 
 	// Number of Image worker go routines
 	nImageThread string
+
 	// Log level
 	logLevel string
+
+	// Max retry count
+	maxRetryCount string
 }
 
 // load attempts to load all necessary environment variables needed to run the application.
@@ -52,6 +56,9 @@ func (w *config) load() (err error) {
 		return
 	}
 	if err = w.loadEnv("NO_IMAGE_WORKER_THREADS", &w.nImageThread); err != nil {
+		return
+	}
+	if err = w.loadEnv("MAX_RETRY_COUNT", &w.maxRetryCount); err != nil {
 		return
 	}
 	if err = w.loadEnv("LOG_LEVEL", &w.logLevel); err != nil {
@@ -107,7 +114,12 @@ func Work(ctx context.Context, config *config) error {
 		logger.Error(ctx, "Unable to convert NO_IMAGE_WORKER_THREADS configuration to int")
 		return err
 	}
-	w := rabbitmq.NewConsumer(config.env, uri, nImageThreadInt)
+	maxRetryCountInt, err := strconv.Atoi(config.maxRetryCount)
+	if err != nil {
+		logger.Error(ctx, "Unable to convert MAX_RETRY_COUNT configuration to int")
+		return err
+	}
+	w := rabbitmq.NewConsumer(config.env, uri, nImageThreadInt, maxRetryCountInt)
 	err = w.Serve(ctx)
 	if err != nil {
 		logger.Error(ctx, "main: unable to perform work", zap.Error(err))

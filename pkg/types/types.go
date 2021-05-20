@@ -41,19 +41,29 @@ type ScanRequest struct {
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 	URL         string             `json:"url"`
 	Product     string             `json:"product"`
+	Cert        string             `json:"cert,omitempty"`
+	RetryCount  int                `json:"retryCount"`
+	PublishTime string             `json:"publishTime,omitempty"`
 }
 
 // HashRequest represents the full request made by hashserve to Hasher microservice
 type HashRequest struct {
-	URL string `json:"URL"`
+	URL  string `json:"URL"`
+	Cert string `json:"cert"`
+}
+
+type Hashes struct {
+	PDNA string `json:"PDNA,omitempty"`
+	MD5  string `json:"MD5,omitempty"`
+	SHA1 string `json:"SHA1,omitempty"`
 }
 
 // ImageHashResponse represents the full response received from Hasher microservice
 type ImageHashResponse struct {
-	URL  string `json:"URL"`
-	PDNA string `json:"PDNA"`
-	MD5  string `json:"MD5"`
-	SHA1 string `json:"SHA1"`
+	URL           string `json:"URL,omitempty"`
+	StatusCode    int    `json:"statusCode"`
+	StatusMessage string `json:"statusMessage"`
+	Hashes        Hashes `json:"hashes,omitempty"`
 }
 
 // VideoHashResponse represents the full response received from Hasher microservice

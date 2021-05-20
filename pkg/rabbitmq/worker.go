@@ -22,19 +22,22 @@ import (
 type ContentType string
 
 const (
-	IMAGEEXCHANGENAME string      = "pdna-processor"
-	VIDEOEXCHANGE     string      = "video-processor"
-	MISCEXCHANGE      string      = "misc-processor"
-	IMAGE_CONTENT     ContentType = "image"
-	VIDEO_CONTENT     ContentType = "video"
-	MISC_CONTENT      ContentType = "miscellaneous"
-	VIDEO_HASHER_URL  string      = "http://localhost:8080/v1/hash/video"
-	IMAGE_HASHER_URL  string      = "http://localhost:8080/v1/hash/image"
+	IMAGEEXCHANGENAME                   string      = "pdna-processor"
+	VIDEOEXCHANGE                       string      = "video-processor"
+	MISCEXCHANGE                        string      = "misc-processor"
+	RETRYEXCHANGE                       string      = "hashserve-dlq"
+	IMAGE_CONTENT                       ContentType = "image"
+	VIDEO_CONTENT                       ContentType = "video"
+	MISC_CONTENT                        ContentType = "miscellaneous"
+	VIDEO_HASHER_URL                    string      = "http://localhost:8080/v1/hash/video"
+	IMAGE_HASHER_URL                    string      = "http://localhost:8080/v1/hash/image"
+	DOWNLOAD_FAILED_FILE_NOT_FOUND_CODE int         = 4
+	HASH_SUCCESS_STATUS_CODE            int         = 1
 )
 
 //getHashes accepts the url as input, calls the hasher service and
 //returns the response as a byte sequence
-func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte, error) {
+func getHashes(ctx context.Context, url string, cert string, contentType ContentType) ([]byte, error) {
 	var hasherURL string
 	if contentType == VIDEO_CONTENT {
 		hasherURL = VIDEO_HASHER_URL
@@ -44,7 +47,8 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, errors.New("Unsupported file type by hasher microservice")
 	}
 	hashRequest := types.HashRequest{
-		URL: url,
+		URL:  url,
+		Cert: cert,
 	}
 	err := hashRequest.ValidateRequiredFields()
 	if err != nil {
@@ -74,12 +78,8 @@ func getHashes(ctx context.Context, url string, contentType ContentType) ([]byte
 		return nil, err
 	}
 	defer resp.Body.Close()
-	//Log a non 200 response from hasher and continue
-	if resp.StatusCode != 200 {
-		logger.Error(ctx, fmt.Sprintf("%d status code from hasher service. Request Json: %s", resp.StatusCode, string(reqJson)), zap.Error(err))
-		return nil, errors.New("Non 200 response")
-	}
 	body, err := ioutil.ReadAll(resp.Body)
+	logger.Debug(ctx, fmt.Sprintf("Hasher status code: %d, Body: %s", resp.StatusCode, string(body)))
 	if err != nil {
 		logger.Error(ctx, "Unable to convert response to byte sequence", zap.Error(err))
 		return nil, err
@@ -118,6 +118,7 @@ type Worker struct {
 	env             string
 	uri             string
 	conn            *Connection
+	maxRetryCount   int
 }
 
 //ackMessage acknowledges the given amqp message
@@ -129,8 +130,8 @@ func (w Worker) ackMessage(msg amqp.Delivery) {
 	}
 }
 
-//rejectMessage rejects the given amqp message
-func (w Worker) rejectMessage(msg amqp.Delivery) {
+//rejectMessageWithoutRequeue rejects the given amqp message
+func (w Worker) rejectMessageWithoutRequeue(msg amqp.Delivery) {
 	if objErr := msg.Reject(false); objErr != nil {
 		//A failure to nack, we send the cancel signal requesting all go routines to stop
 		logger.Error(w.ctx, "error nacking message", zap.Error(objErr))
@@ -157,27 +158,49 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		//If unable to unmarshal the message into scanRequestData, log the error.
 		if err != nil {
 			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			w.rejectMessage(imageMsg)
+			w.rejectMessageWithoutRequeue(imageMsg)
 			continue
 		}
-		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, IMAGE_CONTENT)
-		if err != nil {
-			logger.Error(w.ctx, fmt.Sprintf("Hasher request failed for %s", scanRequestData.URL), zap.Error(err))
-			w.rejectMessage(imageMsg)
-			continue
-		}
+		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, scanRequestData.Cert, IMAGE_CONTENT)
 		var hashedData types.ImageHashResponse
-		err = json.Unmarshal(hasherResponse, &hashedData)
-		if err != nil {
-			logger.Error(w.ctx, fmt.Sprintf("Failed to unmarshal hashser response for %s", scanRequestData.URL), zap.Error(err))
-			w.rejectMessage(imageMsg)
+		errUnmarshal := json.Unmarshal(hasherResponse, &hashedData)
+		// We shouldn't encounter this error ideally
+		if errUnmarshal != nil {
+			logger.Error(w.ctx, "Failed to unmarshal JSON", zap.Error(err))
+			w.ackMessage(imageMsg)
+			continue
+		}
+		// This section of the code deals with retrying using a dead letter queue.
+		// Reject message if hasher either returns a file not found error or if retry count is greater than or equal to max retry count.
+		// Reque if the retry count is below max retry count and hasher returns a status code other than file not found or hash success.
+		if err == nil && hashedData.StatusCode == DOWNLOAD_FAILED_FILE_NOT_FOUND_CODE {
+			logger.Error(w.ctx, fmt.Sprintf("Obtained file not found status code for %s. Rejecting message", scanRequestData.URL))
+			w.ackMessage(imageMsg)
+			continue
+		} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE && scanRequestData.RetryCount >= w.maxRetryCount {
+			logger.Error(w.ctx, fmt.Sprintf("Max retry count reached for %s. Rejecting message", scanRequestData.URL))
+			w.ackMessage(imageMsg)
+			continue
+		} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE || err != nil {
+			// Requeue in dead letter queue
+			scanRequestData.RetryCount = scanRequestData.RetryCount + 1
+			scanRequestData.PublishTime = time.Now().Format(time.RFC3339)
+			json, _ := json.Marshal(scanRequestData)
+			err = objProducer.Publish(w.ctx, json, RETRYEXCHANGE)
+			if err != nil {
+				logger.Error(w.ctx, "failed publishing to the retry queue", zap.Error(err))
+				w.cancelFunc()
+				continue
+			}
+			logger.Error(w.ctx, fmt.Sprintf("Obtained status message: %s.%s URL published for retry", hashedData.StatusMessage, scanRequestData.URL))
+			w.ackMessage(imageMsg)
 			continue
 		}
 		imageFingerprintRequest := types.ImageFingerprintRequest{
 			Path:        hashedData.URL,
-			MD5:         hashedData.MD5,
-			SHA1:        hashedData.SHA1,
-			PhotoDNA:    hashedData.PDNA,
+			MD5:         hashedData.Hashes.MD5,
+			SHA1:        hashedData.Hashes.SHA1,
+			PhotoDNA:    hashedData.Hashes.PDNA,
 			Product:     scanRequestData.Product,
 			Source:      "scan",
 			Identifiers: scanRequestData.Identifiers,
@@ -185,7 +208,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		err = imageFingerprintRequest.ValidateRequiredFields()
 		if err != nil {
 			logger.Error(w.ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
-			w.rejectMessage(imageMsg)
+			w.rejectMessageWithoutRequeue(imageMsg)
 			continue
 		}
 
@@ -200,7 +223,6 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 		err = objProducer.Publish(w.ctx, json, IMAGEEXCHANGENAME)
 		if err != nil {
 			logger.Error(w.ctx, "failed publishing to the thornworker queue", zap.Error(err))
-			w.rejectMessage(imageMsg)
 			w.cancelFunc()
 			continue
 		}
@@ -229,7 +251,7 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 		//If unable to unmarshal the message into scanRequestData, log the error.
 		if err != nil {
 			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			w.rejectMessage(videoMsg)
+			w.rejectMessageWithoutRequeue(videoMsg)
 			continue
 		}
 		w.ackMessage(videoMsg)
@@ -247,7 +269,7 @@ func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 		err := json.Unmarshal(miscMsg.Body, &scanRequestData)
 		if err != nil {
 			log.Printf("unable to marshal message %s", err)
-			w.rejectMessage(miscMsg)
+			w.rejectMessageWithoutRequeue(miscMsg)
 			continue
 		}
 		w.ackMessage(miscMsg)
@@ -265,7 +287,7 @@ func (w Worker) contentTypeWorker(wg *sync.WaitGroup) {
 		err := json.Unmarshal(msg.Body, &scanRequestData)
 		if err != nil {
 			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			w.rejectMessage(msg)
+			w.rejectMessageWithoutRequeue(msg)
 			continue
 		}
 		contentType := getContentType(w.ctx, scanRequestData.URL)
