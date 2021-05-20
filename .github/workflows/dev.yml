@@ -69,8 +69,6 @@ jobs:
           method: kubeconfig
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
         id: setcontext
-      - name: view
-        run: kubectl config view
       - uses: Azure/k8s-deploy@v1.4
         with:
           namespace: 'abuse-api-dev'
