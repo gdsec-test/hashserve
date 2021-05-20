@@ -60,8 +60,10 @@ jobs:
           context: .
           push: true
           tags: docker-dcu-local.artifactory.secureserver.net/hashserve:dev
-      - name: Install
-        run: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
+      - uses: azure/setup-kubectl@v1
+        with:
+          version: '1.15.0'
+        id: install
       - uses: azure/k8s-set-context@v1
         with:
           method: kubeconfig
