@@ -1,0 +1,70 @@
+name: dev
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches : [ master ]
+
+jobs:
+
+  build:
+    runs-on: [self-hosted, dcu]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+
+      - name: Build
+        run:  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -i -v -o build/hashserve github.secureserver.net/digital-crimes/hashserve/cmd/hashserve
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: hashserve-build-artifacts
+          path: build/hashserve/
+  test:
+    runs-on: [self-hosted, dcu]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+      - name: Test
+        run: go test -v ./...
+
+  docker-push:
+    runs-on: [self-hosted, dcu]
+    needs: [build, test]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/download-artifact@master
+        with:
+          name: hashserve-build-artifacts
+          path: build/hashserve
+      - name: copy hashserve
+        run: cp build/hashserve/hashserve hashserve
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to Artifactory
+        uses: docker/login-action@v1
+        with:
+          registry: docker-dcu-local.artifactory.secureserver.net
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push hasher
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: docker-dcu-local.artifactory.secureserver.net/hashserve:dev
+
+      - uses: Azure/k8s-deploy@v1.4
+        with:
+          images: |
+            docker-dcu-local.artifactory.secureserver.net/hashserve:dev
+          imagepullsecrets: |
+            ${{ secrets.DOCKER_USERNAME }}
+            ${{ secrets.DOCKER_PASSWORD }}
