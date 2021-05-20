@@ -34,11 +34,6 @@ jobs:
           go-version: 1.15
       - name: Test
         run: go test -v ./...
-  install-kubectl:
-    runs-on: [self-hosted, dcu]
-    steps:
-      - name: Install
-        run: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
 
   docker-push:
     runs-on: [self-hosted, dcu]
@@ -65,6 +60,8 @@ jobs:
           context: .
           push: true
           tags: docker-dcu-local.artifactory.secureserver.net/hashserve:dev
+      - name: Install
+        run: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/amd64/kubectl"
       - uses: azure/k8s-set-context@v1
         with:
           method: kubeconfig
