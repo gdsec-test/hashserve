@@ -73,6 +73,7 @@ jobs:
         id: setcontext
       - uses: Azure/k8s-deploy@v1.4
         with:
+          namespace: 'abuse-api-dev'
           manifests: |
             k8s/dev/deployment.yaml
           images: |
