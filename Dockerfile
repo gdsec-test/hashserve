@@ -5,6 +5,6 @@ RUN apk update && \
         bash
 WORKDIR /app
 
-COPY . /app/
-
+COPY hashserve /app/
+RUN chmod +x /app/hashserve
 ENTRYPOINT ["/app/hashserve"]

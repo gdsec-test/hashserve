@@ -79,4 +79,3 @@ jobs:
           imagepullsecrets: |
             ${{ secrets.DOCKER_USERNAME }}
             ${{ secrets.DOCKER_PASSWORD }}
-
