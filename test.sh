@@ -2,5 +2,6 @@
 	if [ "$$COMPLETE_COUNT" = "1" ]; then \
     echo "Integration test passed successfully"; \
 	else \
-	  echo "Integration tests failed!!!!! Revert changes manually."; \
+	  echo "Integration tests failed!!!!! Revert changes manually.";
+	   exit 1\
 	fi;
