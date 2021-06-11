@@ -74,7 +74,7 @@ jobs:
       - name: integration test
         run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu apply -f tests/integration-test/pod.yml --record
       - name: sleep
-        run: sleep 60
+        run: sleep 59
       - name: run test script
         run: ./test.sh
         shell: bash
