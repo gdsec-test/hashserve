@@ -72,7 +72,7 @@ jobs:
       - name: delete test pod
         run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu -n abuse-api-dev delete pod shadowfax-integration-test || true
       - name: integration test
-        run: var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu apply -f tests/integration-test/pod.yaml --record
+        run: ls
       - uses: Azure/k8s-deploy@v1.4
         with:
           namespace: 'abuse-api-dev'
