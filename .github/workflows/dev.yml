@@ -75,8 +75,10 @@ jobs:
         run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu apply -f tests/integration-test/pod.yml --record
       - name: sleep
         run: sleep 59
+      - name: grant permission
+        run: git update-index --chmod=+x ./test.sh
       - name: run test script
-        run: sudo ./test.sh
+        run: ./test.sh
         shell: bash
       - uses: Azure/k8s-deploy@v1.4
         with:
