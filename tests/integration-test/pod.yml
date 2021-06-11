@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shadowfax-integration-test
+  namespace: "abuse-api-dev"
+  labels:
+    app: "shadowfax-integration-test"
+spec:
+  imagePullSecrets:
+    - name: "dcu-artifactory-creds"
+  volumes:
+    - name: shadowfax-ssl
+      secret:
+        secretName: tls-shadowfax
+  containers:
+    - name: integration-test
+      imagePullPolicy: "Always"
+      image: "docker-dcu-local.artifactory.secureserver.net/shadowfax-integration-test:dev"
+      volumeMounts:
+        - mountPath: "/etc/shadowfax/ssl"
+          name: shadowfax-ssl
+          readOnly: true
+      env:
+        - name: SNOW_USER
+          value: dcuapi
+        - name: SNOW_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: svc-snow-kelvin
+              key: password
+        - name: RMQ_BROKER
+          value: rmq-dcu.int.godaddy.com
+        - name: RMQ_USER_NAME
+          valueFrom:
+            secretKeyRef:
+              name: amqp-thorn-worker
+              key: username
+        - name: RMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: amqp-thorn-worker
+              key: password
+        - name: RMQ_THORN_OUTPUT
+          value: "google-worker-integration-test"
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-kelvin-api
+              key: password
+
+  restartPolicy: Never
