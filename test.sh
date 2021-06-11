@@ -3,5 +3,5 @@
     echo "Integration test passed successfully"; \
 	else \
 	  echo "Integration tests failed!!!!! Revert changes manually.";
-	   exit 1\
+	   exit 1
 	fi;
