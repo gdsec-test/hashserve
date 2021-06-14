@@ -202,6 +202,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			SHA1:        hashedData.Hashes.SHA1,
 			PhotoDNA:    hashedData.Hashes.PDNA,
 			Product:     scanRequestData.Product,
+			MlScores:    hashedData.MlScores,
 			Source:      "scan",
 			Identifiers: scanRequestData.Identifiers,
 		}

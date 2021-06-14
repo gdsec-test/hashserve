@@ -22,6 +22,7 @@ type ImageFingerprintRequest struct {
 	SHA1        string             `json:"SHA1"`
 	Product     string             `json:"product"`
 	Source      string             `json:"source"`
+	MlScores    MlScores           `json:"scores"`
 	Identifiers AccountIdentifiers `json:"accountIdentifiers"`
 }
 
@@ -58,12 +59,19 @@ type Hashes struct {
 	SHA1 string `json:"SHA1,omitempty"`
 }
 
+type MlScores struct {
+	Csam        float64 `json:"csam,omitempty"`
+	Pornography float64 `json:"pornography,omitempty"`
+	Others      float64 `json:"others,omitempty"`
+}
+
 // ImageHashResponse represents the full response received from Hasher microservice
 type ImageHashResponse struct {
-	URL           string `json:"URL,omitempty"`
-	StatusCode    int    `json:"statusCode"`
-	StatusMessage string `json:"statusMessage"`
-	Hashes        Hashes `json:"hashes,omitempty"`
+	URL           string   `json:"URL,omitempty"`
+	StatusCode    int      `json:"statusCode"`
+	StatusMessage string   `json:"statusMessage"`
+	Hashes        Hashes   `json:"hashes,omitempty"`
+	MlScores      MlScores `json:"scores,omitempty"`
 }
 
 // VideoHashResponse represents the full response received from Hasher microservice
