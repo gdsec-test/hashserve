@@ -41,7 +41,9 @@ spec:
               name: amqp-thorn-worker
               key: password
         - name: RMQ_THORN_OUTPUT
-          value: "google-worker-integration-test"
+          value: "thornworker-output-dev"
+        - name: RMQ_RETRY_QUEUE
+          value: "hashserve-dev-dlq-test"
         - name: MONGO_PASSWORD
           valueFrom:
             secretKeyRef:
