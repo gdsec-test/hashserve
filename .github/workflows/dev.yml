@@ -33,11 +33,11 @@ jobs:
         with:
           go-version: 1.15
       - name: Test
-        run: go tests -v ./...
+        run: go test -v ./...
 
   kube-deploy:
     runs-on: [self-hosted, dcu]
-    needs: [build, tests]
+    needs: [build, test]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@master
@@ -69,10 +69,6 @@ jobs:
           method: kubeconfig
           kubeconfig: ${{ secrets.KUBE_CONFIG }}
         id: setcontext
-      - name: delete tests pod
-        run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu -n abuse-api-dev delete pod shadowfax-integration-tests
-      - name: start integration tests
-        run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu apply -f $(buildroot)/tests/integration-tests/pod.yaml --record
       - uses: Azure/k8s-deploy@v1.4
         with:
           namespace: 'abuse-api-dev'
@@ -83,3 +79,12 @@ jobs:
           imagepullsecrets: |
             ${{ secrets.DCU_ARTIFACTORY_USERNAME }}
             ${{ secrets.DCU_ARTIFACTORY_PASSWORDS }}
+      - name: delete test pod
+        run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu -n abuse-api-dev delete pod shadowfax-integration-test || true
+      - name: integration test
+        run: /var/github-actions/_work/_tool/kubectl/1.15.0/x64/kubectl --context dev-dcu apply -f tests/integration-test/pod.yml --record
+      - name: sleep
+        run: sleep 300
+      - name: run test script
+        run: ./test.sh
+        shell: bash
