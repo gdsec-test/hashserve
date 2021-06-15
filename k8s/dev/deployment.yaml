@@ -70,6 +70,10 @@ spec:
               value: /filecache
             - name: PDNA_URL
               value: "http://127.0.0.1:9091"
+            - name: ML_URL
+              value: "http://127.0.0.1:8501/v1/models/small:classify"
+            - name: ENABLE_ML_MODEL
+              value: "true"
           volumeMounts:
           - mountPath: /filecache
             name: file-cache-volume
@@ -86,6 +90,10 @@ spec:
           volumeMounts:
           - mountPath: /filecache
             name: file-cache-volume
+
+        - name: "hasher-ml"
+          image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
+          
       volumes:
       - name: file-cache-volume
         emptyDir: {}

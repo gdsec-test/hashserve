@@ -52,7 +52,7 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:8a90338"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:56f4185"
           env:
             - name: PORT
               value: "8080"
@@ -64,13 +64,17 @@ spec:
               value: /filecache
             - name: PDNA_URL
               value: "http://127.0.0.1:9091"
+            - name: ML_URL
+              value: "http://127.0.0.1:8501/v1/models/small:classify"
+            - name: ENABLE_ML_MODEL
+              value: "false"
           volumeMounts:
           - mountPath: /filecache
             name: file-cache-volume
         
         - name: "hasher-pdna"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:8a90338"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:56f4185"
           livenessProbe:
             httpGet:
               path: /health
@@ -80,6 +84,10 @@ spec:
           volumeMounts:
           - mountPath: /filecache
             name: file-cache-volume
+
+        
+        - name: "hasher-ml"
+          image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
 
       volumes:
       - name: file-cache-volume
