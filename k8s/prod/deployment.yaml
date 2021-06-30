@@ -86,8 +86,6 @@ spec:
             name: file-cache-volume
 
         
-        - name: "hasher-ml"
-          image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
 
       volumes:
       - name: file-cache-volume

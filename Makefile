@@ -3,7 +3,7 @@ reponame := docker-dcu-local/$(bin_name)
 buildroot := $(HOME)/dockerbuild/$(reponame)
 dockerrepo := docker-dcu-local.artifactory.secureserver.net/$(bin_name)
 # https://golang.org/doc/install/source#environment
-build_pkg ?= github.secureserver.net/digital-crimes/hashserve
+build_pkg ?= github.com/gdcorp-infosec/hashserve
 commit :=
 shell := /bin/bash
 build_version ?= $(shell git describe --always)

@@ -7,11 +7,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.secureserver.net/digital-crimes/hashserve/pkg/rabbitmq"
+	"github.com/gdcorp-infosec/hashserve/pkg/rabbitmq"
 	"go.uber.org/zap"
 
+	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/pkg/errors"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
 )
 
 // config provides a central location for all application specific configuration.

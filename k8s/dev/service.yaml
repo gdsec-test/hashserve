@@ -1,0 +1,14 @@
+---
+kind: "Service"
+apiVersion: "v1"
+metadata:
+  labels:
+    app: "hasher"
+  name: "hasher"
+  namespace: abuse-api-dev
+spec:
+  ports:
+    - name: "hasher"
+      port: 8080
+  selector:
+    app: "hashserve"

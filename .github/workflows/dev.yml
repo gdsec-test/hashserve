@@ -18,7 +18,7 @@ jobs:
           go-version: 1.15
 
       - name: Build
-        run:  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -i -v -o build/hashserve github.secureserver.net/digital-crimes/hashserve/cmd/hashserve
+        run:  GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -i -v -o build/hashserve github.com/gdcorp-infosec/hashserve/cmd/hashserve
 
       - uses: actions/upload-artifact@master
         with:

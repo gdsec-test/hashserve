@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
 	"go.uber.org/zap"
 )
 

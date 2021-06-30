@@ -13,9 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/logger"
-	"github.secureserver.net/digital-crimes/hashserve/pkg/types"
+
+	"github.com/gdcorp-infosec/hashserve/pkg/types"
 	"go.uber.org/zap"
 )
 
