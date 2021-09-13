@@ -36,12 +36,12 @@ spec:
             - name: AMQP_USER
               valueFrom:
                 secretKeyRef:
-                  name: amqp-hashserve
+                  name: amqp-shared-creds
                   key: username
             - name: AMQP_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: amqp-hashserve
+                  name: amqp-shared-creds
                   key: password
             - name: AMQP_BROKER
               value: rmq-dcu.int.godaddy.com
