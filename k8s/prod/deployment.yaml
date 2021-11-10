@@ -52,7 +52,7 @@ spec:
 
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:a0ec79d"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:7486b5f"
           env:
             - name: PORT
               value: "8080"
@@ -74,7 +74,7 @@ spec:
         
         - name: "hasher-pdna"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:a0ec79d"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:7486b5f"
           livenessProbe:
             httpGet:
               path: /health

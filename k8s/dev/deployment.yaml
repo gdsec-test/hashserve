@@ -73,7 +73,7 @@ spec:
             - name: ML_URL
               value: "http://127.0.0.1:8501/v1/models/small:classify"
             - name: ENABLE_ML_MODEL
-              value: "true"
+              value: "false"
           volumeMounts:
           - mountPath: /filecache
             name: file-cache-volume
