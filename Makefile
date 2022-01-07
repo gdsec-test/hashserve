@@ -67,6 +67,12 @@ dev: prep
 	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/dev/deployment.yaml
 	docker build -t $(dockerrepo):dev $(buildroot)
 
+.PHONY: test-build
+test-build: prep
+	@echo "----- building $(reponame) $(build_version) -----"
+	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/test/deployment.yaml
+	docker build -t $(dockerrepo):test $(buildroot)
+
 .PHONY: prod
 prod: prep
 	@echo "----- building $(reponame) $(build_version) -----"
@@ -97,6 +103,13 @@ dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
 	docker push $(dockerrepo):dev
 	kubectl --context dev-dcu apply -f $(buildroot)/k8s/dev/deployment.yaml --record
+
+.PHONY: test-deploy
+test-deploy: test-build
+	@echo "----- deploying $(reponame) test -----"
+	docker push $(dockerrepo):test
+	kubectl --context dev-dcu apply -f $(buildroot)/k8s/test/deployment.yaml --record
+
 .PHONY: ote-deploy
 ote-deploy: ote
 	@echo "----- deploying $(reponame) ote -----"
