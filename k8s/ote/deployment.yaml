@@ -49,10 +49,9 @@ spec:
               value: DEBUG
             - name: MAX_RETRY_COUNT
               value: '1'
-
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:07703f8"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:89be1fb"
           livenessProbe:
             httpGet:
               path: /health
@@ -66,35 +65,9 @@ spec:
               value: "ote"
             - name: LOG_LEVEL
               value: "DEBUG"
-            - name: DOWNLOAD_FILE_LOC
-              value: /filecache
-            - name: PDNA_URL
-              value: "http://127.0.0.1:9091"
             - name: ML_URL
               value: "http://127.0.0.1:8501/v1/models/small:classify"
             - name: ENABLE_ML_MODEL
               value: "true"
-          volumeMounts:
-          - mountPath: /filecache
-            name: file-cache-volume
-        
-        - name: "hasher-pdna"
-          imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher-pdna:07703f8"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 9091
-            initialDelaySeconds: 20
-            periodSeconds: 15
-          volumeMounts:
-          - mountPath: /filecache
-            name: file-cache-volume
-
-        
         - name: "hasher-ml"
           image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
-        
-      volumes:
-      - name: file-cache-volume
-        emptyDir: {}
