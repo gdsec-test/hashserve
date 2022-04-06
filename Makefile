@@ -58,6 +58,7 @@ prep: build
 	mkdir -p $(buildroot) && rm -rf $(buildroot)/*
 	# copy the app code to the build root
 	cp -p build/$(build_name)-linux-amd64 $(buildroot)/$(bin_name)
+	cp -rp certs $(buildroot)
 	cp -rp k8s $(buildroot)
 	cp Dockerfile $(buildroot)
 
@@ -102,7 +103,7 @@ prod-deploy: prod
 dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
 	docker push $(dockerrepo):dev
-	kubectl --context dev-dcu apply -f $(buildroot)/k8s/dev/deployment.yaml --record
+	kubectl --context dev-admin apply -f $(buildroot)/k8s/dev/deployment.yaml --record
 
 .PHONY: test-deploy
 test-deploy: test-build

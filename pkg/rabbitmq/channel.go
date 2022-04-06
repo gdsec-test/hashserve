@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"github.com/streadway/amqp"
+	"os"
 )
 
 // Channel serves as a simple wrapper around an amqp.Channel.
@@ -102,14 +103,19 @@ func (ch *Channel) exchangeBind(env string) error {
 	return nil
 }
 
+
 func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
+
+	args := make(amqp.Table)
+	args["x-queue-type"] = os.Getenv("queue-type")
+
 	q, err := ch.QueueDeclare(
 		"hashserve-"+env, // Name
 		true,             // Durable
 		false,            // AutoDelete
 		false,            // Exclusive
 		false,            // NoWait
-		nil,              // Args
+		args,              // Args
 	)
 	if err != nil {
 		return amqp.Queue{}, err

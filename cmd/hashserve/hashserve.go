@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
-
 	"github.com/gdcorp-infosec/hashserve/pkg/cmd/hashserve"
+	"log"
 )
 
 func main() {

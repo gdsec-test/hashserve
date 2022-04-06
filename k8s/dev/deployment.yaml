@@ -49,6 +49,13 @@ spec:
               value: DEBUG
             - name: MAX_RETRY_COUNT
               value: '1'
+            - name: queue-type
+              valueFrom:
+                configMapKeyRef:
+                  name: quorum-migration
+                  key: queuetype
+            - name: broker_prefix
+              value: "dev-dcu-rmq"
         - name: "hasher"
           imagePullPolicy: "Always"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher:dev"
