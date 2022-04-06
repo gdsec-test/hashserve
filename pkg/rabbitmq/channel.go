@@ -107,7 +107,12 @@ func (ch *Channel) exchangeBind(env string) error {
 func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
 
 	args := make(amqp.Table)
-	args["x-queue-type"] = os.Getenv("queue-type")
+	queue_type:= os.Getenv("queue-type")
+	if queue_type == "quorum"{
+		args["x-queue-type"] =  queue_type
+	} else{
+		args = nil
+	}
 
 	q, err := ch.QueueDeclare(
 		"hashserve-"+env, // Name
