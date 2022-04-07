@@ -6,7 +6,6 @@ import (
 	"github.com/streadway/amqp"
 	"go.uber.org/zap"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 )
@@ -22,28 +21,20 @@ func Dial(uri string, parentCtx context.Context) (*Connection, error) {
 	defer cancel()
 	conn := &Connection{}
 	var err error
-	if os.Getenv("queue-type") == "quorum" {
-		urls := strings.Split(uri, " ")
+	urls := strings.Split(uri, ",")
+	//shuffles list of urls from https://yourbasic.org/golang/shuffle-slice-array/
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(urls), func(i, j int) { urls[i], urls[j] = urls[j], urls[i] })
 
-		//shuffles list of urls from https://yourbasic.org/golang/shuffle-slice-array/
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(urls), func(i, j int) { urls[i], urls[j] = urls[j], urls[i] })
-
-		for _, url := range urls{
-			conn.Connection, err = amqp.Dial(url)
-			if err == nil {
-				logger.Info(ctx, "connected to amqp URI: ", zap.String("URI", url))
-				return conn, nil
-			}
+	for _, url := range urls{
+		conn.Connection, err = amqp.Dial(url)
+		if err == nil {
+			logger.Info(ctx, "connected to amqp URI: ", zap.String("URI", url))
+			return conn, nil
 		}
-		return nil, err
 	}
-	conn.Connection, err = amqp.Dial(uri)
+		return nil, err
 
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
 
 // Channel creates a new custom Channel based on a prior Connection.

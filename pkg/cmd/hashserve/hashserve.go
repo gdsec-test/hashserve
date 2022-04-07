@@ -2,12 +2,10 @@ package hashserve
 
 import (
 	"context"
-	"fmt"
 	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/gdcorp-infosec/hashserve/pkg/rabbitmq"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"net/url"
 	"os"
 	"strconv"
 )
@@ -18,12 +16,6 @@ type config struct {
 	// This variable may also be used for other things such as correctly
 	// namespacing RabbitMQ Exchanges, Queues, and Bindings.
 	env string
-
-	// Username to use when connecting to the AMQP Broker.
-	amqpUser string
-
-	// Password to use when connecting to the AMQP broker.
-	amqpPassword string
 
 	// Broker host to connect and consume messages from.
 	amqpBroker string
@@ -44,19 +36,13 @@ func (w *config) load() (err error) {
 	if err = w.loadEnv("ENV", &w.env); err != nil {
 		return
 	}
-	if err = w.loadEnv("AMQP_USER", &w.amqpUser); err != nil {
-		return
-	}
-	if err = w.loadEnv("AMQP_PASSWORD", &w.amqpPassword); err != nil {
-		return
-	}
 	if os.Getenv("queue-type") == "classic" {
 		if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
 			return
 		}
 	}
 	if os.Getenv("queue-type") == "quorum"{
-		if err = w.loadEnv("broker_prefix", &w.amqpBroker); err != nil {
+		if err = w.loadEnv("MULTIPLE_BROKERS", &w.amqpBroker); err != nil {
 			return
 		}
 	}
@@ -113,17 +99,8 @@ func Run(ctx context.Context) error {
 // It is responsible for loading application specific configurations as well as
 // serving the main work loop.
 func Work(ctx context.Context, config *config) error {
-	broker := config.amqpBroker
-	uri := ""
-	if os.Getenv("queue-type") == "quorum"{
+	uri := config.amqpBroker
 
-		for i:=1; i < 4; i++ {
-			uri += fmt.Sprintf("amqps://%s:%s@%s%d-39.cloud.phx3.gdg:5672/pdna", config.amqpUser, url.QueryEscape(config.amqpPassword), broker,i) + " "
-
-		}
-	} else{
-		uri = fmt.Sprintf("amqps://%s:%s@%s:5672/pdna", config.amqpUser, url.QueryEscape(config.amqpPassword), config.amqpBroker)
-	}
 	nImageThreadInt, err := strconv.Atoi(config.nImageThread)
 	if err != nil {
 		logger.Error(ctx, "Unable to convert NO_IMAGE_WORKER_THREADS configuration to int")
