@@ -51,7 +51,7 @@ spec:
               value: '1'
         - name: "hasher"
           imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:0b4a7e4"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher:e158a0d"
           livenessProbe:
             httpGet:
               path: /health
