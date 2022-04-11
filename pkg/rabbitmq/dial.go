@@ -21,7 +21,7 @@ func Dial(uri string, parentCtx context.Context) (*Connection, error) {
 	defer cancel()
 	conn := &Connection{}
 	var err error
-	urls := strings.Split(uri, ",")
+	urls := strings.Split(uri, ";")
 	//shuffles list of urls from https://yourbasic.org/golang/shuffle-slice-array/
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(urls), func(i, j int) { urls[i], urls[j] = urls[j], urls[i] })

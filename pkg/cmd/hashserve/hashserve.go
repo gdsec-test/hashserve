@@ -36,13 +36,13 @@ func (w *config) load() (err error) {
 	if err = w.loadEnv("ENV", &w.env); err != nil {
 		return
 	}
-	if os.Getenv("queue-type") == "classic" {
-		if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
-			return
-		}
-	}
+
 	if os.Getenv("queue-type") == "quorum"{
 		if err = w.loadEnv("MULTIPLE_BROKERS", &w.amqpBroker); err != nil {
+			return
+		}
+	}else{
+		if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
 			return
 		}
 	}
