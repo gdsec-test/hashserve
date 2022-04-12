@@ -1,0 +1,19 @@
+services:
+  dev:
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    environment:
+      KUBECONFIG: /configs/config
+    ports:
+      - 8080:8080
+    volumes:
+      - ..:/workspace:cached
+      - ~/.kube:/configs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.config/:/root/.config
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined

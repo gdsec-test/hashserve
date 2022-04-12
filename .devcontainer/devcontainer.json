@@ -1,0 +1,11 @@
+{
+    "name": "dev-container",
+    "dockerComposeFile": ["docker-compose.devenv.yml"],
+    "service": "dev",
+    "shutdownAction": "stopCompose",
+    "workspaceFolder": "/workspace",
+    "extensions": ["golang.Go", "ms-azuretools.vscode-docker"],
+    "remoteEnv": {
+        "PATH": "${containerEnv:PATH}:~/go/bin"
+    }
+}
