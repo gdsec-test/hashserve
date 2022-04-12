@@ -2,16 +2,12 @@ package hashserve
 
 import (
 	"context"
-	"fmt"
-	"net/url"
+	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
+	"github.com/gdcorp-infosec/hashserve/pkg/rabbitmq"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
-
-	"github.com/gdcorp-infosec/hashserve/pkg/rabbitmq"
-	"go.uber.org/zap"
-
-	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
-	"github.com/pkg/errors"
 )
 
 // config provides a central location for all application specific configuration.
@@ -20,12 +16,6 @@ type config struct {
 	// This variable may also be used for other things such as correctly
 	// namespacing RabbitMQ Exchanges, Queues, and Bindings.
 	env string
-
-	// Username to use when connecting to the AMQP Broker.
-	amqpUser string
-
-	// Password to use when connecting to the AMQP broker.
-	amqpPassword string
 
 	// Broker host to connect and consume messages from.
 	amqpBroker string
@@ -46,14 +36,15 @@ func (w *config) load() (err error) {
 	if err = w.loadEnv("ENV", &w.env); err != nil {
 		return
 	}
-	if err = w.loadEnv("AMQP_USER", &w.amqpUser); err != nil {
-		return
-	}
-	if err = w.loadEnv("AMQP_PASSWORD", &w.amqpPassword); err != nil {
-		return
-	}
-	if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
-		return
+
+	if os.Getenv("queue-type") == "quorum"{
+		if err = w.loadEnv("MULTIPLE_BROKERS", &w.amqpBroker); err != nil {
+			return
+		}
+	}else{
+		if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
+			return
+		}
 	}
 	if err = w.loadEnv("NO_IMAGE_WORKER_THREADS", &w.nImageThread); err != nil {
 		return
@@ -108,7 +99,8 @@ func Run(ctx context.Context) error {
 // It is responsible for loading application specific configurations as well as
 // serving the main work loop.
 func Work(ctx context.Context, config *config) error {
-	uri := fmt.Sprintf("amqps://%s:%s@%s:5672/pdna", config.amqpUser, url.QueryEscape(config.amqpPassword), config.amqpBroker)
+	uri := config.amqpBroker
+
 	nImageThreadInt, err := strconv.Atoi(config.nImageThread)
 	if err != nil {
 		logger.Error(ctx, "Unable to convert NO_IMAGE_WORKER_THREADS configuration to int")

@@ -33,22 +33,25 @@ spec:
               value: '5'
             - name: ENV
               value: dev
-            - name: AMQP_USER
-              valueFrom:
-                secretKeyRef:
-                  name: amqp-shared-creds
-                  key: username
-            - name: AMQP_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: amqp-shared-creds
-                  key: password
             - name: AMQP_BROKER
-              value: rmq-dcu.int.dev-godaddy.com
+              valueFrom:
+                secretKeyRef:
+                  name: amqp-shared-creds
+                  key: broker_url
+            - name: MULTIPLE_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: amqp-shared-creds
+                  key: multiple_brokers
             - name: LOG_LEVEL
               value: DEBUG
             - name: MAX_RETRY_COUNT
               value: '1'
+            - name: queue-type
+              valueFrom:
+                configMapKeyRef:
+                  name: quorum-migration
+                  key: queuetype
         - name: "hasher"
           imagePullPolicy: "Always"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher:dev"
