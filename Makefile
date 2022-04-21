@@ -97,13 +97,13 @@ prod-deploy: prod
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
 	docker push $(dockerrepo):$(commit)
-	kubectl --context prod-admin apply -f $(buildroot)/k8s/prod/deployment.yaml --record
+	kubectl --context prod-dcu apply -f $(buildroot)/k8s/prod/deployment.yaml --record
 
 .PHONY: dev-deploy
 dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
 	docker push $(dockerrepo):dev
-	kubectl --context dev-admin apply -f $(buildroot)/k8s/dev/deployment.yaml --record
+	kubectl --context dev-dcu apply -f $(buildroot)/k8s/dev/deployment.yaml --record
 
 .PHONY: test-deploy
 test-deploy: test-build
