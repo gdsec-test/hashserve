@@ -47,12 +47,16 @@ spec:
               value: DEBUG
             - name: MAX_RETRY_COUNT
               value: '1'
+            - name: MULTIPLE_BROKERS
+              valueFrom:
+                secretKeyRef:
+                  name: amqp-shared-creds
+                  key: multiple_brokers_pdna
             - name: queue-type
               valueFrom:
                 configMapKeyRef:
                   name: quorum-migration
                   key: queuetype
-
         - name: "hasher"
           imagePullPolicy: "Always"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher:test"
