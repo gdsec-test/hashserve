@@ -1,8 +1,9 @@
 package rabbitmq
 
 import (
-	"github.com/streadway/amqp"
 	"os"
+
+	"github.com/streadway/amqp"
 )
 
 // Channel serves as a simple wrapper around an amqp.Channel.
@@ -11,27 +12,12 @@ type Channel struct {
 	*amqp.Channel
 }
 
-var products = [...]string{
-	"hashserve",
-}
-
 // Initialize will attempt to initialize all of the required exchanges, queues, and bindings
 // that are necessary for a correct RabbitMQ topology.
-//
-// First it attempts to declare all of the product topic exchanges and bind all of these
-// to an internal topic exchange used for routing e.g. product-binding -> thornworker-<env>
-//
-// Next, declare our consumer queue and bind it to thornworker-<env> topic exchange.
 //
 // Finally, return a <-chan amqp.Delivery channel which serves as a way to consume messages
 // that are produced on the queue above.
 func (ch *Channel) Initialize(env string, prefetchCount int) (<-chan amqp.Delivery, error) {
-	if err := ch.exchangeDeclare(env); err != nil {
-		return nil, err
-	}
-	if err := ch.exchangeBind(env); err != nil {
-		return nil, err
-	}
 
 	q, err := ch.queueDeclareAndBind(env)
 	if err != nil {
@@ -56,61 +42,13 @@ func (ch *Channel) Initialize(env string, prefetchCount int) (<-chan amqp.Delive
 	)
 }
 
-func (ch *Channel) exchangeDeclare(env string) error {
-	err := ch.ExchangeDeclare(
-		"hashserve-"+env,   // Name
-		amqp.ExchangeTopic, // Kind
-		true,               // Durable
-		false,              // AutoDelete
-		true,               // Internal
-		false,              // NoWait
-		nil,                // Args
-	)
-	if err != nil {
-		return err
-	}
-
-	for _, p := range products {
-		if err := ch.ExchangeDeclare(
-			p,                  // Name
-			amqp.ExchangeTopic, // Kind
-			true,               // Durable
-			false,              // AutoDelete
-			false,              // Internal
-			false,              // NoWait
-			nil,                // Args
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (ch *Channel) exchangeBind(env string) error {
-	for _, p := range products {
-		if err := ch.ExchangeBind(
-			"hashserve-"+env, // Destination
-			"#."+env,         // Key
-			p,                // Source
-			false,            // NoWait
-			nil,              // Args
-		); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-
 func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
 
 	args := make(amqp.Table)
-	queue_type:= os.Getenv("queue-type")
-	if queue_type == "quorum"{
-		args["x-queue-type"] =  queue_type
-	} else{
+	queue_type := os.Getenv("queue-type")
+	if queue_type == "quorum" {
+		args["x-queue-type"] = queue_type
+	} else {
 		args = nil
 	}
 
@@ -120,18 +58,18 @@ func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
 		false,            // AutoDelete
 		false,            // Exclusive
 		false,            // NoWait
-		args,              // Args
+		args,             // Args
 	)
 	if err != nil {
 		return amqp.Queue{}, err
 	}
 
 	err = ch.QueueBind(
-		q.Name,           // Name
-		"#."+env,         // Key
-		"hashserve-"+env, // Exchange
-		false,            // NoWait
-		nil,              // Args
+		q.Name,      // Name
+		"#."+env,    // Key
+		"hashserve", // Exchange
+		false,       // NoWait
+		nil,         // Args
 	)
 
 	if err != nil {
