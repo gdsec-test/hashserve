@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../base
+
+namespace: abuse-api-dev
+images:
+- name: docker-dcu-local.artifactory.secureserver.net/hashserve
+  newTag: dev
+
+configMapGenerator:
+- literals:
+  - ENV=dev
+  - LOG_LEVEL=DEBUG
+  name: hasher-env-specific-values
+
+configMapGenerator:
+- literals:
+  - ENV=dev
+  - LOG_LEVEL=DEBUG
+  name: hasher-env-specific-values
