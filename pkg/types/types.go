@@ -14,6 +14,10 @@ type AccountIdentifiers struct {
 	XID         string `json:"XID"`
 }
 
+type Fingerprints struct {
+	Fingerprints []ImageFingerprintRequest `json:"fingerprints"`
+}
+
 // ImageFingerprintRequest structure
 type ImageFingerprintRequest struct {
 	Path        string             `json:"path"`

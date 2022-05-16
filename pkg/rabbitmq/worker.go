@@ -214,8 +214,11 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			continue
 		}
 
+		fingerprints := types.Fingerprints{
+			Fingerprints: []types.ImageFingerprintRequest{imageFingerprintRequest},
+		}
 		//Publish the new request to ThornWorker queue
-		json, err := json.Marshal(imageFingerprintRequest)
+		json, err := json.Marshal(fingerprints)
 		logger.Debug(w.ctx, fmt.Sprintf("Producer json %s", string(json)))
 		if err != nil {
 			log.Printf("unable to marshal message %s", err)

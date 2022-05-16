@@ -55,7 +55,7 @@ func (p *Producer) Publish(ctx context.Context, messageContent []byte, exchangeN
 	logger.Debug(ctx, "About to publish")
 	for {
 		err := p.ch.Publish(exchangeName,
-			"#."+p.env,
+			"#."+p.env+"-v2",
 			false,
 			false,
 			message)
