@@ -5,6 +5,8 @@ resources:
 
 namespace: abuse-api-dev
 images:
+- name: docker-dcu-local.artifactory.secureserver.net/hasher
+  newTag: dev
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: dev
 

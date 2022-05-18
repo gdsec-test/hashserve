@@ -7,6 +7,8 @@ namespace: abuse-api-ote
 images:
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: ote
+- name: docker-dcu-local.artifactory.secureserver.net/hasher
+  newTag: ote
 
 configMapGenerator:
 - literals:

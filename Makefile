@@ -26,7 +26,6 @@ build_targets := $(strip \
 define deploy_k8s
 	docker push $(dockerrepo):$(2)
 	cd k8s/$(1) && kustomize edit set image $$(docker inspect --format='{{index .RepoDigests 0}}' $(dockerrepo):$(2))
-	# cd k8s/$(1) && kustomize edit set image $$(docker inspect --format='{{index .RepoDigests 0}}' $(dockerrepohasher):$(2))
 	kubectl --context $(1)-dcu apply -k k8s/$(1)
 	cd k8s/$(1) && kustomize edit set image $(dockerrepo):$(1)
 endef
