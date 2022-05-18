@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../base
+
+namespace: abuse-api-prod
+images:
+- name: docker-dcu-local.artifactory.secureserver.net/hashserve
+  newTag: prod
+- name: docker-dcu-local.artifactory.secureserver.net/hasher
+  newTag: e158a0d
+
+replicas:
+- name: hashserve
+  count: 4
+
+configMapGenerator:
+- literals:
+  - NO_IMAGE_WORKER_THREADS=10
+  - ENV=prod
+  - LOG_LEVEL=INFO
+  name: env-specific-values

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../base
+
+namespace: abuse-api-ote
+images:
+- name: docker-dcu-local.artifactory.secureserver.net/hashserve
+  newTag: ote
+- name: docker-dcu-local.artifactory.secureserver.net/hasher
+  newTag: ote
+
+configMapGenerator:
+- literals:
+  - NO_IMAGE_WORKER_THREADS=10
+  - ENV=ote
+  - LOG_LEVEL=DEBUG
+  name: env-specific-values

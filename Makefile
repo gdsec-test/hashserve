@@ -1,7 +1,7 @@
 bin_name := hashserve
 reponame := docker-dcu-local/$(bin_name)
-buildroot := $(HOME)/dockerbuild/$(reponame)
 dockerrepo := docker-dcu-local.artifactory.secureserver.net/$(bin_name)
+dockerrepohasher := docker-dcu-local.artifactory.secureserver.net/hasher
 # https://golang.org/doc/install/source#environment
 build_pkg ?= github.com/gdcorp-infosec/hashserve
 commit :=
@@ -22,6 +22,14 @@ build_targets := $(strip \
 	$(foreach goos,$(build_goos), \
 		$(foreach goarch,$(build_goarch), \
 			$(build_name)-$(goos)-$(goarch)$(if $(findstring windows,$(goos)),.exe,))))
+
+define deploy_k8s
+	docker push $(dockerrepo):$(2)
+	cd k8s/$(1) && kustomize edit set image $$(docker inspect --format='{{index .RepoDigests 0}}' $(dockerrepo):$(2))
+	kubectl --context $(1)-dcu apply -k k8s/$(1)
+	cd k8s/$(1) && kustomize edit set image $(dockerrepo):$(1)
+endef
+
 
 bail = { printf >&2 "\nError: $(1))\n"; exit 1; }
 
@@ -55,39 +63,31 @@ build/$(build_name)%: $(wildcard cmd/$(bin_name)/*.go)
 .PHONY: prep
 prep: build
 	@echo "----- preparing $(reponame) $(build_version) -----"
-	mkdir -p $(buildroot) && rm -rf $(buildroot)/*
-	# copy the app code to the build root
-	cp -p build/$(build_name)-linux-amd64 $(buildroot)/$(bin_name)
-	cp -rp certs $(buildroot)
-	cp -rp k8s $(buildroot)
-	cp Dockerfile $(buildroot)
+	# copy the app code
+	cp -p build/$(build_name)-linux-amd64 build/$(bin_name)
 
 .PHONY: dev
 dev: prep
 	@echo "----- building $(reponame) $(build_version) -----"
-	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/dev/deployment.yaml
-	docker build -t $(dockerrepo):dev $(buildroot)
+	docker build -t $(dockerrepo):dev .
 
 .PHONY: test-build
 test-build: prep
 	@echo "----- building $(reponame) $(build_version) -----"
-	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/test/deployment.yaml
-	docker build -t $(dockerrepo):test $(buildroot)
+	docker build -t $(dockerrepo):test .
 
 .PHONY: prod
 prod: prep
 	@echo "----- building $(reponame) $(build_version) -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/prod/deployment.yaml
-	sed -ie 's/REPLACE_WITH_GIT_COMMIT/$(commit)/' $(buildroot)/k8s/prod/deployment.yaml
-	docker build -t $(dockerrepo):$(commit) $(buildroot)
+	docker build -t $(dockerrepo):$(commit) .
+
 .PHONY: ote
 ote: prep
 	@echo "----- building $(reponame) $(build_version) -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	sed -ie 's/THIS_STRING_IS_REPLACED_DURING_BUILD/$(build_date)/g' $(buildroot)/k8s/ote/deployment.yaml
-	sed -ie 's/REPLACE_WITH_GIT_COMMIT/$(commit)/' $(buildroot)/k8s/ote/deployment.yaml
-	docker build -t $(dockerrepo):$(commit) $(buildroot)
+	docker build -t $(dockerrepo):$(commit) .
+
 .PHONY: prod-deploy
 prod-deploy: prod
 	@echo "----- deploying $(reponame) prod -----"
@@ -96,20 +96,17 @@ prod-deploy: prod
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
-	docker push $(dockerrepo):$(commit)
-	kubectl --context prod-dcu apply -f $(buildroot)/k8s/prod/deployment.yaml --record
+	$(call deploy_k8s,prod,$(commit))
 
 .PHONY: dev-deploy
 dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
-	docker push $(dockerrepo):dev
-	kubectl --context dev-dcu apply -f $(buildroot)/k8s/dev/deployment.yaml --record
+	$(call deploy_k8s,dev,dev)
 
 .PHONY: test-deploy
 test-deploy: test-build
 	@echo "----- deploying $(reponame) test -----"
-	docker push $(dockerrepo):test
-	kubectl --context dev-dcu apply -f $(buildroot)/k8s/test/deployment.yaml --record
+	$(call deploy_k8s,test,test)
 
 .PHONY: ote-deploy
 ote-deploy: ote
@@ -119,8 +116,7 @@ ote-deploy: ote
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
-	docker push $(dockerrepo):$(commit)
-	kubectl --context ote-dcu apply -f $(buildroot)/k8s/ote/deployment.yaml --record
+	$(call deploy_k8s,ote,ote)
 
 PHONY: clean
 clean:

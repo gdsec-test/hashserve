@@ -2,7 +2,7 @@ apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
   name: "hashserve"
-  namespace: "abuse-api-ote"
+  namespace: "abuse-api-dev"
   labels:
     app: "hashserve"
 spec:
@@ -24,15 +24,11 @@ spec:
           name: "dcu-artifactory-creds"
       containers:
         - name: "hashserve"
-          imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hashserve:REPLACE_WITH_GIT_COMMIT"
+          image: "docker-dcu-local.artifactory.secureserver.net/hashserve"
+          envFrom:
+          - configMapRef:
+              name: env-specific-values
           env:
-            - name: BUILD_DATE
-              value: 'THIS_STRING_IS_REPLACED_DURING_BUILD'
-            - name: NO_IMAGE_WORKER_THREADS
-              value: '10'
-            - name: ENV
-              value: ote
             - name: AMQP_BROKER
               valueFrom:
                 secretKeyRef:
@@ -43,31 +39,34 @@ spec:
                 secretKeyRef:
                   name: amqp-shared-creds
                   key: multiple_brokers_pdna
-            - name: LOG_LEVEL
-              value: DEBUG
             - name: MAX_RETRY_COUNT
               value: '1'
             - name: queue-type
-              value: quorum
+              valueFrom:
+                configMapKeyRef:
+                  name: quorum-migration
+                  key: queuetype
         - name: "hasher"
-          imagePullPolicy: "Always"
-          image: "docker-dcu-local.artifactory.secureserver.net/hasher:e158a0d"
+          image: "docker-dcu-local.artifactory.secureserver.net/hasher"
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
             initialDelaySeconds: 20
             periodSeconds: 15
+          envFrom:
+          - configMapRef:
+              name: env-specific-values
           env:
             - name: PORT
               value: "8080"
-            - name: ENV
-              value: "ote"
-            - name: LOG_LEVEL
-              value: "DEBUG"
+            - name: DOWNLOAD_FILE_LOC
+              value: /filecache
+            - name: PDNA_URL
+              value: "http://127.0.0.1:9091"
             - name: ML_URL
               value: "http://127.0.0.1:8501/v1/models/small:classify"
             - name: ENABLE_ML_MODEL
-              value: "true"
+              value: "false"
         - name: "hasher-ml"
           image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
