@@ -8,7 +8,7 @@ images:
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: prod
 - name: docker-dcu-local.artifactory.secureserver.net/hasher
-  newTag: prod
+  newTag: e158a0d
 
 replicas:
 - name: hashserve
