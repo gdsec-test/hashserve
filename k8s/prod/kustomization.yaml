@@ -11,7 +11,7 @@ images:
   newTag: prod
 
 replicas:
-- name: thorn-worker
+- name: hashserve
   count: 4
 
 configMapGenerator:
