@@ -56,7 +56,7 @@ spec:
             periodSeconds: 15
           envFrom:
           - configMapRef:
-              name: hasher-env-specific-values
+              name: env-specific-values
           env:
             - name: PORT
               value: "8080"

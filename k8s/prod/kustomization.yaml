@@ -19,10 +19,4 @@ configMapGenerator:
   - NO_IMAGE_WORKER_THREADS=10
   - ENV=prod
   - LOG_LEVEL=INFO
-  name: hasher-env-specific-values
-
-configMapGenerator:
-- literals:
-  - ENV=prod
-  - LOG_LEVEL=INFO
-  name: hasher-env-specific-values
+  name: env-specific-values

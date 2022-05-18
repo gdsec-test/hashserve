@@ -15,10 +15,4 @@ configMapGenerator:
   - NO_IMAGE_WORKER_THREADS=10
   - ENV=ote
   - LOG_LEVEL=DEBUG
-  name: hasher-env-specific-values
-
-configMapGenerator:
-- literals:
-  - ENV=ote
-  - LOG_LEVEL=DEBUG
-  name: hasher-env-specific-values
+  name: env-specific-values
