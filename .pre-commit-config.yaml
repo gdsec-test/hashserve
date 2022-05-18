@@ -1,0 +1,9 @@
+repos:
+- repo: https://github.com/godaddy/tartufo
+  rev: v2.5.0
+  hooks:
+  - id: tartufo
+- repo: https://github.com/dnephin/pre-commit-golang.git
+  rev: v0.5.0
+  hooks:
+    - id: go-lint

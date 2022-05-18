@@ -49,3 +49,4 @@ jobs:
           aws-deploy-role: ${{ secrets.AWS_DEPLOY_ROLE_CICD }}
           repo-pat: ${{ secrets.REPO_PAT }}
           main-path: github.com/gdcorp-infosec/hashserve/cmd/hashserve
+          on-prem-github-repo-pat: ${{ secrets.ON_PREM_GITHUB_REPO_PAT }}
