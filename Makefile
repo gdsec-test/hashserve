@@ -58,7 +58,7 @@ build: $(addprefix build/,$(build_targets))
 build/$(build_name)%: $(wildcard cmd/$(bin_name)/*.go)
 	GOOS=$(strip $(foreach s,$(build_goos),$(findstring $(s),$(@F)))) \
 	GOARCH=$(strip $(foreach s,$(build_goarch),$(findstring $(s),$(@F)))) \
-		go build -i -v -o $(@) $(build_ldflags) $(build_pkg)/cmd/$(bin_name)
+		go build -v -o $(@) $(build_ldflags) $(build_pkg)/cmd/$(bin_name)
 
 .PHONY: prep
 prep: build

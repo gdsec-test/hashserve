@@ -15,4 +15,5 @@ configMapGenerator:
   - NO_IMAGE_WORKER_THREADS=10
   - ENV=ote
   - LOG_LEVEL=DEBUG
+  - ELASTIC_APM_ENVIRONMENT=ote
   name: env-specific-values

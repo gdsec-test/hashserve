@@ -15,6 +15,8 @@ import (
 
 	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
+	"go.elastic.co/apm/module/apmhttp/v2"
+	"go.elastic.co/apm/v2"
 
 	"github.com/gdcorp-infosec/hashserve/pkg/types"
 	"go.uber.org/zap"
@@ -65,14 +67,14 @@ func getHashes(ctx context.Context, url string, cert string, contentType Content
 	}
 
 	//Get hashses from hashser micro service
-	req, err := http.NewRequest(http.MethodPost, hasherURL, bytes.NewBuffer(reqJson))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, hasherURL, bytes.NewBuffer(reqJson))
 	if err != nil {
 		logger.Error(ctx, "Error in creating a request to hasher service", zap.Error(err))
 		return nil, err
 	}
-	var httpClient = &http.Client{
+	httpClient := apmhttp.WrapClient(&http.Client{
 		Timeout: 2 * time.Minute,
-	}
+	})
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error(ctx, fmt.Sprintf("failed getting a response from hasher microservice. Request JSON: %s", string(reqJson)), zap.Error(err))
@@ -154,86 +156,94 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 	defer objProducer.ch.Close()
 	for imageMsg := range w.imageIngestChan {
 		logger.Debug(w.ctx, "Image channel started")
-		scanRequestData := types.ScanRequest{}
-		err := json.Unmarshal(imageMsg.Body, &scanRequestData)
-		//If unable to unmarshal the message into scanRequestData, log the error.
-		if err != nil {
-			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
-			w.rejectMessageWithoutRequeue(imageMsg)
-			continue
-		}
-		hasherResponse, err := getHashes(w.ctx, scanRequestData.URL, scanRequestData.Cert, IMAGE_CONTENT)
-		var hashedData types.ImageHashResponse
-		errUnmarshal := json.Unmarshal(hasherResponse, &hashedData)
-		// We shouldn't encounter this error ideally
-		if errUnmarshal != nil {
-			logger.Error(w.ctx, "Failed to unmarshal JSON", zap.Error(err))
-			w.ackMessage(imageMsg)
-			continue
-		}
-		// This section of the code deals with retrying using a dead letter queue.
-		// Reject message if hasher either returns a file not found error or if retry count is greater than or equal to max retry count.
-		// Reque if the retry count is below max retry count and hasher returns a status code other than file not found or hash success.
-		if err == nil && hashedData.StatusCode == DOWNLOAD_FAILED_FILE_NOT_FOUND_CODE {
-			logger.Error(w.ctx, fmt.Sprintf("Obtained file not found status code for %s. Rejecting message", scanRequestData.URL))
-			w.ackMessage(imageMsg)
-			continue
-		} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE && scanRequestData.RetryCount >= w.maxRetryCount {
-			logger.Error(w.ctx, fmt.Sprintf("Max retry count reached for %s. Rejecting message", scanRequestData.URL))
-			w.ackMessage(imageMsg)
-			continue
-		} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE || err != nil {
-			// Requeue in dead letter queue
-			scanRequestData.RetryCount = scanRequestData.RetryCount + 1
-			scanRequestData.PublishTime = time.Now().Format(time.RFC3339)
-			json, _ := json.Marshal(scanRequestData)
-			err = objProducer.Publish(w.ctx, json, RETRYEXCHANGE)
+		func() {
+			tx := apm.DefaultTracer().StartTransaction("Hash image", "request")
+			defer tx.End()
+			ctx := apm.ContextWithTransaction(w.ctx, tx)
+			scanRequestData := types.ScanRequest{}
+			err := json.Unmarshal(imageMsg.Body, &scanRequestData)
+			//If unable to unmarshal the message into scanRequestData, log the error.
 			if err != nil {
-				logger.Error(w.ctx, "failed publishing to the retry queue", zap.Error(err))
-				w.cancelFunc()
-				continue
+				logger.Error(ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
+				w.rejectMessageWithoutRequeue(imageMsg)
+				return
 			}
-			logger.Error(w.ctx, fmt.Sprintf("Obtained status message: %s.%s URL published for retry", hashedData.StatusMessage, scanRequestData.URL))
+			hasherResponse, err := getHashes(ctx, scanRequestData.URL, scanRequestData.Cert, IMAGE_CONTENT)
+			var hashedData types.ImageHashResponse
+			errUnmarshal := json.Unmarshal(hasherResponse, &hashedData)
+			// We shouldn't encounter this error ideally
+			if errUnmarshal != nil {
+				logger.Error(ctx, "Failed to unmarshal JSON", zap.Error(err))
+				w.ackMessage(imageMsg)
+				return
+			}
+			// This section of the code deals with retrying using a dead letter queue.
+			// Reject message if hasher either returns a file not found error or if retry count is greater than or equal to max retry count.
+			// Reque if the retry count is below max retry count and hasher returns a status code other than file not found or hash success.
+			tx.Result = hashedData.StatusMessage
+			if err == nil && hashedData.StatusCode == DOWNLOAD_FAILED_FILE_NOT_FOUND_CODE {
+				logger.Error(ctx, fmt.Sprintf("Obtained file not found status code for %s. Rejecting message", scanRequestData.URL))
+				w.ackMessage(imageMsg)
+				return
+			} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE && scanRequestData.RetryCount >= w.maxRetryCount {
+				logger.Error(ctx, fmt.Sprintf("Max retry count reached for %s. Rejecting message", scanRequestData.URL))
+				w.ackMessage(imageMsg)
+				return
+			} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE || err != nil {
+				// Requeue in dead letter queue
+				scanRequestData.RetryCount = scanRequestData.RetryCount + 1
+				scanRequestData.PublishTime = time.Now().Format(time.RFC3339)
+				json, _ := json.Marshal(scanRequestData)
+				err = objProducer.Publish(w.ctx, json, RETRYEXCHANGE)
+				if err != nil {
+					logger.Error(ctx, "failed publishing to the retry queue", zap.Error(err))
+					w.cancelFunc()
+					return
+				}
+				logger.Error(ctx, fmt.Sprintf("Obtained status message: %s.%s URL published for retry", hashedData.StatusMessage, scanRequestData.URL))
+				w.ackMessage(imageMsg)
+				return
+			}
+			imageFingerprintRequest := types.ImageFingerprintRequest{
+				Path:        hashedData.URL,
+				MD5:         hashedData.Hashes.MD5,
+				SHA1:        hashedData.Hashes.SHA1,
+				PhotoDNA:    hashedData.Hashes.PDNA,
+				Product:     scanRequestData.Product,
+				MlScores:    hashedData.MlScores,
+				Source:      "scan",
+				Identifiers: scanRequestData.Identifiers,
+			}
+			err = imageFingerprintRequest.ValidateRequiredFields()
+			if err != nil {
+				logger.Error(ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
+				w.rejectMessageWithoutRequeue(imageMsg)
+				return
+			}
+
+			fingerprints := types.Fingerprints{
+				Fingerprints: []types.ImageFingerprintRequest{imageFingerprintRequest},
+			}
+			//Publish the new request to ThornWorker queue
+			json, err := json.Marshal(fingerprints)
+			logger.Debug(ctx, fmt.Sprintf("Producer json %s", string(json)))
+			if err != nil {
+				log.Printf("unable to marshal message %s", err)
+				w.cancelFunc()
+				return
+			}
+			span, ctx := apm.StartSpan(ctx, "Hash publish", "amqp.publish")
+			err = objProducer.Publish(ctx, json, IMAGEEXCHANGENAME)
+			span.End()
+			if err != nil {
+				logger.Error(ctx, "failed publishing to the thornworker queue", zap.Error(err))
+				w.cancelFunc()
+				return
+			}
+
 			w.ackMessage(imageMsg)
-			continue
-		}
-		imageFingerprintRequest := types.ImageFingerprintRequest{
-			Path:        hashedData.URL,
-			MD5:         hashedData.Hashes.MD5,
-			SHA1:        hashedData.Hashes.SHA1,
-			PhotoDNA:    hashedData.Hashes.PDNA,
-			Product:     scanRequestData.Product,
-			MlScores:    hashedData.MlScores,
-			Source:      "scan",
-			Identifiers: scanRequestData.Identifiers,
-		}
-		err = imageFingerprintRequest.ValidateRequiredFields()
-		if err != nil {
-			logger.Error(w.ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
-			w.rejectMessageWithoutRequeue(imageMsg)
-			continue
-		}
-
-		fingerprints := types.Fingerprints{
-			Fingerprints: []types.ImageFingerprintRequest{imageFingerprintRequest},
-		}
-		//Publish the new request to ThornWorker queue
-		json, err := json.Marshal(fingerprints)
-		logger.Debug(w.ctx, fmt.Sprintf("Producer json %s", string(json)))
-		if err != nil {
-			log.Printf("unable to marshal message %s", err)
-			w.cancelFunc()
-			continue
-		}
-		err = objProducer.Publish(w.ctx, json, IMAGEEXCHANGENAME)
-		if err != nil {
-			logger.Error(w.ctx, "failed publishing to the thornworker queue", zap.Error(err))
-			w.cancelFunc()
-			continue
-		}
-
-		w.ackMessage(imageMsg)
-		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s image", scanRequestData.URL))
+			logger.Debug(ctx, fmt.Sprintf("Successfully processed %s image", scanRequestData.URL))
+		}()
 	}
 }
 

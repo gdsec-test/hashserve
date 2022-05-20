@@ -19,4 +19,5 @@ configMapGenerator:
   - NO_IMAGE_WORKER_THREADS=10
   - ENV=prod
   - LOG_LEVEL=INFO
+  - ELASTIC_APM_ENVIRONMENT=prod
   name: env-specific-values

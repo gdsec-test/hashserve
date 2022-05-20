@@ -46,6 +46,16 @@ spec:
                 configMapKeyRef:
                   name: quorum-migration
                   key: queuetype
+            - name: ELASTIC_APM_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: apm-access
+                  key: url
+            - name: ELASTIC_APM_SECRET_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: apm-access
+                  key: secret
         - name: "hasher"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher"
           livenessProbe:
@@ -68,5 +78,3 @@ spec:
               value: "http://127.0.0.1:8501/v1/models/small:classify"
             - name: ENABLE_ML_MODEL
               value: "false"
-        - name: "hasher-ml"
-          image: "docker-dcu-local.artifactory.secureserver.net/csamdetection"
