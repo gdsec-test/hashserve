@@ -29,11 +29,6 @@ spec:
           - configMapRef:
               name: env-specific-values
           env:
-            - name: AMQP_BROKER
-              valueFrom:
-                secretKeyRef:
-                  name: amqp-shared-creds
-                  key: broker_url
             - name: MULTIPLE_BROKERS
               valueFrom:
                 secretKeyRef:
@@ -41,11 +36,6 @@ spec:
                   key: multiple_brokers_pdna
             - name: MAX_RETRY_COUNT
               value: '1'
-            - name: queue-type
-              valueFrom:
-                configMapKeyRef:
-                  name: quorum-migration
-                  key: queuetype
             - name: ELASTIC_APM_SERVER_URL
               valueFrom:
                 secretKeyRef:

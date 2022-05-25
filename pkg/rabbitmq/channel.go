@@ -1,8 +1,6 @@
 package rabbitmq
 
 import (
-	"os"
-
 	"github.com/streadway/amqp"
 )
 
@@ -45,12 +43,8 @@ func (ch *Channel) Initialize(env string, prefetchCount int) (<-chan amqp.Delive
 func (ch *Channel) queueDeclareAndBind(env string) (amqp.Queue, error) {
 
 	args := make(amqp.Table)
-	queue_type := os.Getenv("queue-type")
-	if queue_type == "quorum" {
-		args["x-queue-type"] = queue_type
-	} else {
-		args = nil
-	}
+	args["x-queue-type"] = "quorum"
+
 
 	q, err := ch.QueueDeclare(
 		"hashserve-"+env, // Name
