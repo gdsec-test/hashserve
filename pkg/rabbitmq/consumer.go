@@ -58,7 +58,7 @@ func (c *Consumer) Serve(parentCtx context.Context) error {
 	defer cancel()
 	logger.Info(ctx, "connecting to amqp URI: ", zap.String("URI", c.uri))
 	logger.Info(ctx, "connecting to amqp in ENV: ", zap.String("ENV", c.env))
-	conn, err := Dial(c.uri, parentCtx)
+	conn, err := Dial(c.uri)
 	if err != nil {
 		return err
 	}

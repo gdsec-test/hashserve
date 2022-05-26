@@ -1,7 +1,6 @@
 package rabbitmq
 
 import (
-	"context"
 	"github.com/streadway/amqp"
 	"math/rand"
 	"strings"
@@ -14,9 +13,7 @@ type Connection struct {
 }
 
 // Dial creates a new AMQP Connection to the Broker located at uri.
-func Dial(uri string, parentCtx context.Context) (*Connection, error) {
-	_, cancel := context.WithCancel(parentCtx)
-	defer cancel()
+func Dial(uri string) (*Connection, error) {
 	conn := &Connection{}
 	var err error
 	urls := strings.Split(uri, ";")
