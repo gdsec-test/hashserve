@@ -2,9 +2,7 @@ package rabbitmq
 
 import (
 	"context"
-	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
-	"go.uber.org/zap"
 	"math/rand"
 	"strings"
 	"time"
@@ -17,7 +15,7 @@ type Connection struct {
 
 // Dial creates a new AMQP Connection to the Broker located at uri.
 func Dial(uri string, parentCtx context.Context) (*Connection, error) {
-	ctx, cancel := context.WithCancel(parentCtx)
+	_, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	conn := &Connection{}
 	var err error
@@ -29,7 +27,6 @@ func Dial(uri string, parentCtx context.Context) (*Connection, error) {
 	for _, url := range urls{
 		conn.Connection, err = amqp.Dial(url)
 		if err == nil {
-			logger.Info(ctx, "connected to amqp URI: ", zap.String("URI", url))
 			return conn, nil
 		}
 	}
