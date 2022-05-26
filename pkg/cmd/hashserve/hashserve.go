@@ -37,15 +37,10 @@ func (w *config) load() (err error) {
 		return
 	}
 
-	if os.Getenv("queue-type") == "quorum"{
-		if err = w.loadEnv("MULTIPLE_BROKERS", &w.amqpBroker); err != nil {
+
+	if err = w.loadEnv("MULTIPLE_BROKERS", &w.amqpBroker); err != nil {
 			return
 		}
-	}else{
-		if err = w.loadEnv("AMQP_BROKER", &w.amqpBroker); err != nil {
-			return
-		}
-	}
 	if err = w.loadEnv("NO_IMAGE_WORKER_THREADS", &w.nImageThread); err != nil {
 		return
 	}
