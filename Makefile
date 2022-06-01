@@ -86,7 +86,7 @@ prod: prep
 ote: prep
 	@echo "----- building $(reponame) $(build_version) -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	docker build -t $(dockerrepo):$(commit) .
+	docker build -t $(dockerrepo):ote .
 
 .PHONY: prod-deploy
 prod-deploy: prod
