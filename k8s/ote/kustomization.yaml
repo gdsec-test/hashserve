@@ -8,7 +8,8 @@ images:
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: ote
 - name: docker-dcu-local.artifactory.secureserver.net/hasher
-  newTag: ote
+  newTag: 270a0d3
+
 
 configMapGenerator:
 - literals:

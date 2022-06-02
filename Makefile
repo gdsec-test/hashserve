@@ -86,7 +86,7 @@ prod: prep
 ote: prep
 	@echo "----- building $(reponame) $(build_version) -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	docker build -t $(dockerrepo):ote .
+	docker build -t $(dockerrepo):$(commit) .
 
 .PHONY: prod-deploy
 prod-deploy: prod
@@ -116,7 +116,7 @@ ote-deploy: ote
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
-	$(call deploy_k8s,ote,ote)
+	$(call deploy_k8s,ote,$(commit))
 
 PHONY: clean
 clean:
