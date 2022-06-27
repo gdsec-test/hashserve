@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gdcorp-infosec/cset-go-common/utilities"
 	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
 	"go.elastic.co/apm/module/apmhttp/v2"
@@ -160,12 +161,17 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			tx := apm.DefaultTracer().StartTransaction("Hash image", "request")
 			defer tx.End()
 			ctx := apm.ContextWithTransaction(w.ctx, tx)
+			utilities.StartMetrics("hash_image")
+			start := time.Now()
+			errmsg := "failure"
+
 			scanRequestData := types.ScanRequest{}
 			err := json.Unmarshal(imageMsg.Body, &scanRequestData)
 			//If unable to unmarshal the message into scanRequestData, log the error.
 			if err != nil {
 				logger.Error(ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
 				w.rejectMessageWithoutRequeue(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 			hasherResponse, err := getHashes(ctx, scanRequestData.URL, scanRequestData.Cert, IMAGE_CONTENT)
@@ -175,6 +181,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			if errUnmarshal != nil {
 				logger.Error(ctx, "Failed to unmarshal JSON", zap.Error(err))
 				w.ackMessage(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 			// This section of the code deals with retrying using a dead letter queue.
@@ -184,10 +191,12 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			if err == nil && hashedData.StatusCode == DOWNLOAD_FAILED_FILE_NOT_FOUND_CODE {
 				logger.Error(ctx, fmt.Sprintf("Obtained file not found status code for %s. Rejecting message", scanRequestData.URL))
 				w.ackMessage(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE && scanRequestData.RetryCount >= w.maxRetryCount {
 				logger.Error(ctx, fmt.Sprintf("Max retry count reached for %s. Rejecting message", scanRequestData.URL))
 				w.ackMessage(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			} else if hashedData.StatusCode != HASH_SUCCESS_STATUS_CODE || err != nil {
 				// Requeue in dead letter queue
@@ -198,10 +207,12 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 				if err != nil {
 					logger.Error(ctx, "failed publishing to the retry queue", zap.Error(err))
 					w.cancelFunc()
+					utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 					return
 				}
 				logger.Error(ctx, fmt.Sprintf("Obtained status message: %s.%s URL published for retry", hashedData.StatusMessage, scanRequestData.URL))
 				w.ackMessage(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 			imageFingerprintRequest := types.ImageFingerprintRequest{
@@ -218,6 +229,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			if err != nil {
 				logger.Error(ctx, "failed validating the FingerprintRequest attributes", zap.Error(err))
 				w.rejectMessageWithoutRequeue(imageMsg)
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 
@@ -230,6 +242,7 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			if err != nil {
 				log.Printf("unable to marshal message %s", err)
 				w.cancelFunc()
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 			span, ctx := apm.StartSpan(ctx, "Hash publish", "amqp.publish")
@@ -238,10 +251,12 @@ func (w Worker) imageWorkerFunc(wg *sync.WaitGroup) {
 			if err != nil {
 				logger.Error(ctx, "failed publishing to the thornworker queue", zap.Error(err))
 				w.cancelFunc()
+				utilities.EndMetrics("hash_image", &errmsg, time.Since(start).Seconds())
 				return
 			}
 
 			w.ackMessage(imageMsg)
+			utilities.EndMetrics("hash_image", nil, time.Since(start).Seconds())
 			logger.Debug(ctx, fmt.Sprintf("Successfully processed %s image", scanRequestData.URL))
 		}()
 	}
@@ -261,15 +276,21 @@ func (w Worker) videoWorkerFunc(wg *sync.WaitGroup) {
 	logger.Info(w.ctx, "Video worker started")
 	for videoMsg := range w.videoIngestChan {
 		logger.Debug(w.ctx, "Video channel started")
+		utilities.StartMetrics("hash_video")
+		start := time.Now()
+		errmsg := "failure"
+
 		scanRequestData := types.ScanRequest{}
 		err := json.Unmarshal(videoMsg.Body, &scanRequestData)
 		//If unable to unmarshal the message into scanRequestData, log the error.
 		if err != nil {
 			logger.Error(w.ctx, "failed to unmarshall json string into scanRequestData struct", zap.Error(err))
 			w.rejectMessageWithoutRequeue(videoMsg)
+			utilities.EndMetrics("hash_video", &errmsg, time.Since(start).Seconds())
 			continue
 		}
 		w.ackMessage(videoMsg)
+		utilities.EndMetrics("hash_video", nil, time.Since(start).Seconds())
 		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s video", scanRequestData.URL))
 	}
 }
@@ -280,14 +301,20 @@ func (w Worker) miscWorkerFunc(wg *sync.WaitGroup) {
 	logger.Info(w.ctx, "Misc worker started")
 	for miscMsg := range w.miscIngestChan {
 		logger.Debug(w.ctx, "Miscellaneous channel started")
+		utilities.StartMetrics("hash_misc")
+		start := time.Now()
+		errmsg := "failure"
+
 		scanRequestData := types.ScanRequest{}
 		err := json.Unmarshal(miscMsg.Body, &scanRequestData)
 		if err != nil {
 			log.Printf("unable to marshal message %s", err)
 			w.rejectMessageWithoutRequeue(miscMsg)
+			utilities.EndMetrics("hash_misc", &errmsg, time.Since(start).Seconds())
 			continue
 		}
 		w.ackMessage(miscMsg)
+		utilities.EndMetrics("hash_misc", nil, time.Since(start).Seconds())
 		logger.Debug(w.ctx, fmt.Sprintf("Successfully processed %s misc content", scanRequestData.URL))
 		continue
 	}

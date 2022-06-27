@@ -20,8 +20,7 @@ spec:
         prometheus.io/port: "8080"
     spec:
       imagePullSecrets:
-        -
-          name: "dcu-artifactory-creds"
+        - name: "dcu-artifactory-creds"
       containers:
         - name: "hashserve"
           image: "docker-dcu-local.artifactory.secureserver.net/hashserve"
@@ -48,6 +47,7 @@ spec:
                   key: secret
         - name: "hasher"
           image: "docker-dcu-local.artifactory.secureserver.net/hasher"
+          imagePullPolicy: Always
           livenessProbe:
             httpGet:
               path: /health
@@ -68,3 +68,13 @@ spec:
               value: "http://127.0.0.1:8501/v1/models/small:classify"
             - name: ENABLE_ML_MODEL
               value: "false"
+            - name: ELASTIC_APM_SERVER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: apm-access
+                  key: url
+            - name: ELASTIC_APM_SECRET_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: apm-access
+                  key: secret

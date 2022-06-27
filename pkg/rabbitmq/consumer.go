@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gdcorp-infosec/cset-go-common/utilities"
 	"github.com/gdcorp-infosec/dcu-structured-logging-go/logger"
 	"github.com/streadway/amqp"
 	"go.uber.org/zap"
@@ -56,6 +57,7 @@ executes content type specific logic and publishes to its respective rabbitmq qu
 func (c *Consumer) Serve(parentCtx context.Context) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
+	utilities.Register()
 	logger.Info(ctx, "connecting to amqp URI: ", zap.String("URI", c.uri))
 	logger.Info(ctx, "connecting to amqp in ENV: ", zap.String("ENV", c.env))
 	conn, err := Dial(c.uri)
