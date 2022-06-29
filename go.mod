@@ -3,7 +3,7 @@ module github.com/gdcorp-infosec/hashserve
 go 1.17
 
 require (
-	github.com/gdcorp-infosec/cset-go-common v1.1.1
+	github.com/gdcorp-infosec/cset-go-common v1.1.2
 	github.com/gdcorp-infosec/dcu-structured-logging-go v0.0.0-20210629012057-2eb184bcb8ea
 	github.com/pkg/errors v0.9.1
 	github.com/streadway/amqp v1.0.0

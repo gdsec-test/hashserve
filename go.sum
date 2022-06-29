@@ -73,6 +73,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/gdcorp-infosec/cset-go-common v1.1.1 h1:klxKaMiwec26rH8pgShgTPNXpwBo3k6yRcoW7uuQL/Y=
 github.com/gdcorp-infosec/cset-go-common v1.1.1/go.mod h1:kLgX1wJb+/Hlre+dgVp2W25PkVR/+/7SNYRLoQn2pA4=
+github.com/gdcorp-infosec/cset-go-common v1.1.2 h1:y1rf4LSsWKbRwxTut1jXXIquPT8Yalv2Tl1Q1I/YqTU=
+github.com/gdcorp-infosec/cset-go-common v1.1.2/go.mod h1:kLgX1wJb+/Hlre+dgVp2W25PkVR/+/7SNYRLoQn2pA4=
 github.com/gdcorp-infosec/dcu-structured-logging-go v0.0.0-20210629012057-2eb184bcb8ea h1:7bvFEQEXB/mfxcqApvKVDLalrjmzW1bYPmNABCxbWYo=
 github.com/gdcorp-infosec/dcu-structured-logging-go v0.0.0-20210629012057-2eb184bcb8ea/go.mod h1:+TRZydXM69M5LgbInOOBGW3NB9V0ShEbf12uPA/E/XE=
 github.com/go-gl/glfw v0.0.0-20190409004039-e6da0acd62b1/go.mod h1:vR7hzQXu2zJy9AVAgeJqvqgH9Q5CA+iKCZ2gyEVpxRU=
