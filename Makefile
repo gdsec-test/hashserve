@@ -26,7 +26,7 @@ build_targets := $(strip \
 define deploy_k8s
 	docker push $(dockerrepo):$(2)
 	cd k8s/$(1) && kustomize edit set image $$(docker inspect --format='{{index .RepoDigests 0}}' $(dockerrepo):$(2))
-	kubectl --context $(1)-dcu apply -k k8s/$(1)
+	kubectl --context $(3) apply -k k8s/$(1)
 	cd k8s/$(1) && kustomize edit set image $(dockerrepo):$(1)
 endef
 
@@ -96,17 +96,17 @@ prod-deploy: prod
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
-	$(call deploy_k8s,prod,$(commit))
+	$(call deploy_k8s,prod,$(commit),prod-dcu)
 
 .PHONY: dev-deploy
 dev-deploy: dev
 	@echo "----- deploying $(reponame) dev -----"
-	$(call deploy_k8s,dev,dev)
+	$(call deploy_k8s,dev,dev,dev-cset)
 
 .PHONY: test-deploy
 test-deploy: test-build
 	@echo "----- deploying $(reponame) test -----"
-	$(call deploy_k8s,test,test)
+	$(call deploy_k8s,test,test,test-cset)
 
 .PHONY: ote-deploy
 ote-deploy: ote
@@ -116,7 +116,7 @@ ote-deploy: ote
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
 	git fetch && git checkout $(build_branch)
-	$(call deploy_k8s,ote,$(commit))
+	$(call deploy_k8s,ote,$(commit),ote-dcu)
 
 PHONY: clean
 clean:
