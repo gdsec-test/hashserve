@@ -92,11 +92,10 @@ ote: prep
 prod-deploy: prod
 	@echo "----- deploying $(reponame) prod -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	read -p "About to build production image from main branch. Are you sure? (Y/N): " response ; \
+	read -p "About to deploy a production image. Are you sure? (Y/N): " response ; \
 	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
-	git fetch && git checkout $(build_branch)
-	$(call deploy_k8s,prod,$(commit),prod-dcu)
+	$(call deploy_k8s,prod,$(commit),prod-cset)
 
 .PHONY: dev-deploy
 dev-deploy: dev
@@ -112,11 +111,8 @@ test-deploy: test-build
 ote-deploy: ote
 	@echo "----- deploying $(reponame) ote -----"
 	$(eval commit:=$(shell git rev-parse --short HEAD))
-	read -p "About to build production image from main branch. Are you sure? (Y/N): " response ; \
-	if [[ $$response == 'N' || $$response == 'n' ]] ; then exit 1 ; fi
 	if [[ `git status --porcelain | wc -l` -gt 0 ]] ; then echo "You must stash your changes before proceeding" ; exit 1 ; fi
-	git fetch && git checkout $(build_branch)
-	$(call deploy_k8s,ote,$(commit),ote-dcu)
+	$(call deploy_k8s,ote,$(commit),ote-cset)
 
 PHONY: clean
 clean:
