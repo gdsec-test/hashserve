@@ -6,7 +6,7 @@ resources:
 namespace: abuse-api-ote
 images:
 - name: docker-dcu-local.artifactory.secureserver.net/hasher
-  newTag: "0920bb6"
+  newTag: 0920bb6
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: ote
 
