@@ -6,7 +6,7 @@ resources:
 namespace: abuse-api-prod
 images:
 - name: docker-dcu-local.artifactory.secureserver.net/hasher
-  newTag: 0920bb6
+  newTag: 1387a68
 - name: docker-dcu-local.artifactory.secureserver.net/hashserve
   newTag: prod
 
