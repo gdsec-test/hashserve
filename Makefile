@@ -47,8 +47,8 @@ check:
 	@command -v go >/dev/null 2>&1 || \
 		$(call bail,go command not found - bad build env? GOROOT=$(GOROOT))
 
-.PHONY: test
-test:
+.PHONY: unit-test
+unit-test:
 	go test ./...
 
 build: $(addprefix build/,$(build_targets))
