@@ -51,6 +51,15 @@ check:
 unit-test:
 	go test ./...
 
+.PHONY: testcov
+testcov:
+	@echo "----- Running tests with coverage -----"
+	go test ./... -cover
+
+.PHONY: init
+init:
+	@echo "----- Make init -----"
+
 build: $(addprefix build/,$(build_targets))
 	mkdir -p build
 	touch $$PWD
