@@ -1,0 +1,176 @@
+---
+name: Run CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    - cron: '37 2 * * 3'
+
+jobs:
+  ci:
+    runs-on: [csetubuntu]
+    steps:
+            
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.11.1
+          architecture: 'x64' 
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '^1.13.1'
+          architecture: 'x64' 
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          architecture: 'x64' 
+
+      - name: Get Secrets
+        id: secrets
+        run: |
+          SECRET=$(aws secretsmanager get-secret-value --secret-id '/GitHub/GitHub-Actions-Runner-PAT' --query 'SecretString' --output text)
+          PAT=$(echo ${SECRET} | jq -r .PAT)
+          echo "::set-output name=pat-cloud::${PAT}"
+          echo "::add-mask::$PAT"
+
+          SECRET=$(aws secretsmanager get-secret-value --secret-id '/CICD/artifactory' --query 'SecretString' --output text)
+          USERNAME=$(echo ${SECRET} | jq -r .username)
+          PASSWORD=$(echo ${SECRET} | jq -r .password)
+          echo "::set-output name=artifactory-username::${USERNAME}"
+          echo "::add-mask::$USERNAME"
+          echo "::set-output name=artifactory-password::${PASSWORD}"
+          echo "::add-mask::$PASSWORD"
+
+          SECRET=$(aws secretsmanager get-secret-value --secret-id '/KeePass/github-pat/secureserver' --query 'SecretString' --output text)
+          PREMISE_PAT=$(echo ${SECRET} | jq -r .pat)
+          echo "::set-output name=pat-onpremise::${PREMISE_PAT}"
+          echo "::add-mask::$PREMISE_PAT"
+
+      - name: Configure Pip/Poetry
+        shell: bash
+        run: |
+          mkdir -p ~/.pip
+          echo "[distutils]" > ~/.pypirc
+          echo "index-servers = local" >> ~/.pypirc
+          echo "[local]" >> ~/.pypirc
+          echo "repository: https://artifactory.secureserver.net/artifactory/api/pypi/pypi-digital-crimes-unit-main-local" >> ~/.pypirc
+          echo "username: ${{ steps.secrets.outputs.artifactory-username }}" >> ~/.pypirc
+          echo "password: ${{ steps.secrets.outputs.artifactory-password }}" >> ~/.pypirc
+
+          echo "[global]" > ~/.pip/pip.conf
+          echo "index-url = https://${{ steps.secrets.outputs.artifactory-username }}:${{ steps.secrets.outputs.artifactory-password }}@artifactory.secureserver.net/artifactory/api/pypi/python-virt/simple" >> ~/.pip/pip.conf
+
+          echo "POETRY_HTTP_BASIC_GDDY_USERNAME=${{ steps.secrets.outputs.artifactory-username }}" >> $GITHUB_ENV
+          echo "POETRY_HTTP_BASIC_GDDY_PASSWORD=${{ steps.secrets.outputs.artifactory-password }}" >> $GITHUB_ENV
+      
+      - name: Configure Golang
+        shell: bash
+        run: |
+          go env -w GOPRIVATE="github.com/gdcorp-infosec/*,github.com/gdcorp-golang/*,github.secureserver.net/*"
+          git config --global url."https://${{ steps.secrets.outputs.pat-cloud }}:x-oauth-basic@github.com/gdcorp-infosec".insteadOf "https://github.com/gdcorp-infosec"
+          git config --global url."https://${{ steps.secrets.outputs.pat-onpremise }}:x-oauth-basic@github.secureserver.net".insteadOf "https://github.secureserver.net" 
+          git config --global url."https://${{ steps.secrets.outputs.pat-cloud }}:x-oauth-basic@github.com/gdcorp-golang".insteadOf "https://github.com/gdcorp-golang"
+             
+      - name: Install Dependencies with pip
+        run: | 
+          pip install pre-commit
+          pip install coverage
+          pip install pipx
+          pip install poetry
+
+      - name: Install Packages
+        run: |
+          make init
+      
+      - name: Run unit tests
+        run: |
+          make unit-test
+
+      - name: Lint Code Base
+        uses: github/super-linter@454ba4482ce2cd0c505bc592e83c06e1e37ade61
+        env:
+          VALIDATE_ALL_CODEBASE: false
+          VALIDATE_GITHUB_ACTIONS: false
+          VALIDATE_BASH: false
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ steps.secrets.outputs.pat-cloud }}
+
+      - name: Generate Test Coverage
+        run: |
+          make testcov
+
+      - name: Read Coverage, Create Findings
+        if: ${{ contains('file', 'coverage.xml') }}
+        uses: gdcorp-action-public-forks/cobertura-action@4729b64a58adc1be66bc724e6421f24667e04b89
+        with:
+          path: coverage.xml
+          minimum_coverage: 80
+
+  analyze:
+    name: Analyze
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['go']
+        # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby', 'swift' ]
+        # Use only 'java' to analyze code written in Java, Kotlin or both
+        # Use only 'javascript' to analyze code written in JavaScript, TypeScript or both
+        # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          # If you wish to specify custom queries, you can do so here or in a config file.
+          # By default, queries listed here will override any specified in a config file.
+          # Prefix the list here with "+" to use these queries and those in the config file.
+
+          # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
+          # queries: security-extended,security-and-quality
+
+
+      # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
+      # If this step fails, then you should remove it and run the build manually (see below)
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      # ℹ️ Command-line programs to run using the OS shell.
+      # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+
+      #   If the Autobuild fails above, remove it and uncomment the following three lines.
+      #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
+
+      # - run: |
+      #     echo "Run, Build Application using script"
+      #     ./location_of_script_within_repo/buildscript.sh
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        with:
+          category: "/language:${{matrix.language}}"
