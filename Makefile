@@ -1,7 +1,7 @@
 bin_name := hashserve
 reponame := docker-dcu-local/$(bin_name)
-dockerrepo := docker-dcu-local.artifactory.secureserver.net/$(bin_name)
-dockerrepohasher := docker-dcu-local.artifactory.secureserver.net/hasher
+dockerrepo := gdartifactory1.jfrog.io/docker-dcu-local/$(bin_name)
+dockerrepohasher := gdartifactory1.jfrog.io/docker-dcu-local/hasher
 # https://golang.org/doc/install/source#environment
 build_pkg ?= github.com/gdcorp-infosec/hashserve
 commit :=

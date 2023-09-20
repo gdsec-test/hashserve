@@ -1,1 +1,1 @@
-FROM docker-dcu-local.artifactory.secureserver.net/cset-dev-image:latest
+FROM gdartifactory1.jfrog.io/docker-dcu-local/cset-dev-image:latest

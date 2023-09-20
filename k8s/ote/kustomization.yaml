@@ -5,9 +5,9 @@ resources:
 
 namespace: abuse-api-ote
 images:
-- name: docker-dcu-local.artifactory.secureserver.net/hasher
+- name: gdartifactory1.jfrog.io/docker-dcu-local/hasher
   newTag: 1387a68
-- name: docker-dcu-local.artifactory.secureserver.net/hashserve
+- name: gdartifactory1.jfrog.io/docker-dcu-local/hashserve
   newTag: ote
 
 

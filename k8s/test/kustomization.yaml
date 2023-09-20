@@ -5,9 +5,9 @@ resources:
 
 namespace: abuse-api-test
 images:
-- name: docker-dcu-local.artifactory.secureserver.net/hasher
+- name: gdartifactory1.jfrog.io/docker-dcu-local/hasher
   newTag: test
-- name: docker-dcu-local.artifactory.secureserver.net/hashserve
+- name: gdartifactory1.jfrog.io/docker-dcu-local/hashserve
   newTag: test
 
 configMapGenerator:
